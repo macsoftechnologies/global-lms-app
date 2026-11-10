@@ -1,0 +1,3 @@
+
+--- MATCH AT 1947203 ---
+)(z9,{})}),(0,K.jsx)(B,{path:`/admin/transcripts`,element:(0,K.jsx)(sme,{})}),(0,K.jsx)(B,{path:`/admin/dmin-evaluations`,element:(0,K.jsx)(ume,{})}),(0,K.jsx)(B,{path:`/admin/courses`,element:(0,K.jsx)(j0,{})}),(0,K.jsx)(B,{path:`/admin/live-sessions`,element:(0,K.jsx)(h9,{})}),(0,K.jsx)(B,{path:`/admin/chat`,element:(0,K.jsx)(g9,{})}),(0,K.jsx)(B,{path:`/admin/approvals`,element:(0,K.jsx)(E0,{})}),(0,K.jsx)(B,{path:`/admin/courses/create`,element:(0,K.jsx)(D5,{})}),(0,K.jsx)(B,{path:`/admin/courses/:id/edit`,element:(0,K.jsx)(D5,{})}),(0,K.jsx)(B,{path:`/admin/courses/:courseId/modules/:moduleId/lessons/new`,element:(0,K.jsx)(P9,{})}),(0,K.jsx)(B,{path:`/admin/courses/:courseId/modules/:mo

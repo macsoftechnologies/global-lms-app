@@ -1,0 +1,85 @@
+Date,Project,Module,Screen Name,API Name,HTTP Method,API Endpoint,API Testing Status,Integration Status,Task Completed,Pending Task,Remarks
+,Global LMS,1. Authentication & Profile,Student Registration Screen,Complete Student Registration,POST,/auth/register,Not Tested,Not Started,,,"Registers student with customProfile & documents (Aadhaar, Photos, Certificates)"
+,Global LMS,1. Authentication & Profile,Student Login Screen,User Authentication / Login,POST,/auth/login,Not Tested,Not Started,,,"Returns accessToken, refreshToken & user profile"
+,Global LMS,1. Authentication & Profile,Auth Session / Token Management,Refresh Access Token,POST,/auth/refresh-token,Not Tested,Not Started,,,Silent token refresh on HTTP 401 Unauthorized
+,Global LMS,1. Authentication & Profile,Student Profile Screen,Get Current User Profile,GET,/users/me,Not Tested,Not Started,,,Retrieves authenticated student profile details
+,Global LMS,1. Authentication & Profile,Edit Profile Screen,Update Current User Profile,PATCH,/users/me,Not Tested,Not Started,,,"Updates fullName, mobile, avatarUrl"
+,Global LMS,1. Authentication & Profile,Change Password Screen,Change User Password,POST,/auth/change-password,Not Tested,Not Started,,,Validates old_password and updates to new_password
+,Global LMS,1. Authentication & Profile,Interview Confirmation Screen,Confirm Interview Attendance,PATCH,/students/{studentId}/confirm-interview,Not Tested,Not Started,,,Confirms student attendance for admission interview
+,Global LMS,1. Authentication & Profile,Student Profile / Logout Action,User Logout,POST,/auth/logout,Not Tested,Not Started,,,Invalidates refreshToken on server & clears local session
+,Global LMS,"2. Programs, Courses & Enrollment",Browse Courses Screen,Browse Published Courses,GET,/courses?page=1&limit=20&status=PUBLISHED,Not Tested,Not Started,,,Paginated catalog of published courses with pricing & thumbnail
+,Global LMS,"2. Programs, Courses & Enrollment",Course Details Screen,Get Course Details by ID,GET,/courses/{courseId},Not Tested,Not Started,,,Retrieves full 14-field course specification and pricing
+,Global LMS,"2. Programs, Courses & Enrollment",Browse Academic Programs Screen,Browse Academic Programs,GET,/programs,Not Tested,Not Started,,,"Lists available degree programs (B.Th, M.Div, Dip.Th, etc.)"
+,Global LMS,"2. Programs, Courses & Enrollment",Program Details Screen,Get Program Details by ID,GET,/programs/{programId},Not Tested,Not Started,,,"Retrieves program curriculum, terms, and degree requirements"
+,Global LMS,"2. Programs, Courses & Enrollment",Student Dashboard / My Courses,Get My Enrolled Courses,GET,/students/{studentId}/enrollments,Not Tested,Not Started,,,Returns enrolled standalone courses with progress percentages
+,Global LMS,"2. Programs, Courses & Enrollment",Student Dashboard / My Programs,Get My Enrolled Programs,GET,/students/{studentId}/programs,Not Tested,Not Started,,,Returns active degree programs and assigned batch details
+,Global LMS,"2. Programs, Courses & Enrollment",Program Courses & Curriculum Screen,Get Courses for Enrolled Program,GET,/enrollments/my-program-courses?programId={programId},Not Tested,Not Started,,,Courses mapped to student enrolled degree program
+,Global LMS,"2. Programs, Courses & Enrollment",Course Details / Self-Enroll Action,Self-Enroll in Standalone Course,POST,/enrollments/student/courses/{courseId}/enroll,Not Tested,Not Started,,,Registers student into a standalone theological course
+,Global LMS,"2. Programs, Courses & Enrollment",Program Details / Program Enroll Action,Self-Enroll in Program,POST,/enrollments/student/programs/{programId}/enroll,Not Tested,Not Started,,,Registers student into an academic program and selected courses
+,Global LMS,"3. Curriculum, Lessons & Video Player",Course Curriculum / Syllabus Screen,Get Course Modules,GET,/courses/{courseId}/content/modules,Not Tested,Not Started,,,Curriculum outline containing chapters and module sequences
+,Global LMS,"3. Curriculum, Lessons & Video Player",Lesson List / Module Syllabus Screen,Get Module Lessons,GET,/courses/{courseId}/content/modules/{moduleId}/lessons,Not Tested,Not Started,,,"Lists lessons, video durations, and learning resources"
+,Global LMS,"3. Curriculum, Lessons & Video Player",Video Player / Lesson Checkpoints,Get In-Lesson Interactive Checkpoints,GET,/courses/{courseId}/lessons/{lessonId}/checkpoints,Not Tested,Not Started,,,Video timestamp markers with interactive knowledge check questions
+,Global LMS,"3. Curriculum, Lessons & Video Player",Video Player / Checkpoint Quiz Modal,Answer Lesson Checkpoint,POST,/courses/{courseId}/lessons/{lessonId}/checkpoints/{checkpointId}/answer,Not Tested,Not Started,,,Submits selected option/text answer at specific video timestamp
+,Global LMS,"3. Curriculum, Lessons & Video Player",Video Player / Transcripts & Captions,Get Lesson Captions / Transcript (Vimeo),GET,/vimeo/transcript?lessonId={lessonId},Not Tested,Not Started,,,Synchronized text transcript and captions for video playback
+,Global LMS,"3. Curriculum, Lessons & Video Player",Course Resources / Full Transcripts Screen,Get All Course Transcripts,GET,/vimeo/course-transcripts?courseId={courseId},Not Tested,Not Started,,,Compiles all lesson transcriptions for searchable study
+,Global LMS,4. Video Quizzes & AI Study,Video Player / Video Quiz Modal,Get Video Quizzes for Lesson,GET,/courses/{courseId}/content/modules/{moduleId}/lessons/{lessonId}/video-quizzes,Not Tested,Not Started,,,Embedded multiple-choice assessment quizzes inside lesson
+,Global LMS,4. Video Quizzes & AI Study,Video Player / Submit Quiz Answer,Submit Video Quiz Answer,POST,/courses/{courseId}/content/modules/{moduleId}/lessons/{lessonId}/video-quizzes/{quizId}/answers,Not Tested,Not Started,,,Records student option selection and essay answer reflection
+,Global LMS,4. Video Quizzes & AI Study,Video Player / Quiz Review & Score,Get My Video Quiz Answers,GET,/courses/{courseId}/content/modules/{moduleId}/lessons/{lessonId}/video-quizzes/my-answers,Not Tested,Not Started,,,Student submission history and immediate score calculation
+,Global LMS,4. Video Quizzes & AI Study,AI Study Assistant / Flashcards Screen,Get Lesson AI Study Data (Flashcards & Quiz),GET,/courses/{courseId}/content/lessons/{lessonId}/ai-data,Not Tested,Not Started,,,"AI-generated flashcards, summaries, and practice quiz questions"
+,Global LMS,4. Video Quizzes & AI Study,AI Study Assistant / Practice Quiz Screen,Submit Lesson AI Practice Quiz,POST,/courses/{courseId}/content/lessons/{lessonId}/ai-quiz/submit,Not Tested,Not Started,,,Submits answers to AI practice quiz and returns instant feedback
+,Global LMS,5. Learning Progress,Video Player / Watch Time Tracker,Update Video Watch Time,PATCH,/progress/lessons/{lessonId}/watch-time,Not Tested,Not Started,,,Periodic heartbeat saving watchedSeconds and playback position
+,Global LMS,5. Learning Progress,Video Player / Mark Lesson Complete Action,Mark Lesson Complete,POST,/progress/lessons/{lessonId}/complete,Not Tested,Not Started,,,Marks lesson as 100% finished and unlocks subsequent lesson
+,Global LMS,5. Learning Progress,Course Details / Progress Summary Screen,Get Course Progress & Percentage,GET,/progress/courses/{courseId},Not Tested,Not Started,,,Aggregated completion percentage across all modules
+,Global LMS,6. Assignments,Assignments List Screen,List Course Assignments,GET,/courses/{courseId}/assignments,Not Tested,Not Started,,,"Homework tasks, deadlines, max points, and submission instructions"
+,Global LMS,6. Assignments,Assignment Submission Screen,Submit Assignment File,POST,/courses/{courseId}/assignments/{assignmentId}/submit,Not Tested,Not Started,,,Multipart file upload (PDF/DOCX/ZIP) for faculty grading
+,Global LMS,7. Online Exams & Quizzes,Course Exams & Tests Screen,List Exams for Course,GET,/courses/{courseId}/exams,Not Tested,Not Started,,,"Scheduled midterms, finals, quizzes, and allowed attempt count"
+,Global LMS,7. Online Exams & Quizzes,Exam Instructions & Guidelines Screen,Get Exam Details & Guidelines,GET,/exams/{examId},Not Tested,Not Started,,,"Time limit, total marks, passing percentage, and rules"
+,Global LMS,7. Online Exams & Quizzes,Exam Taking / Timer Start Screen,Start Exam Attempt (Starts Timer),POST,/exams/{examId}/start,Not Tested,Not Started,,,"Initializes attempt, locks window, and triggers server-side timer"
+,Global LMS,7. Online Exams & Quizzes,Exam Question Paper Screen,Get Exam Questions,GET,/exams/{examId}/questions,Not Tested,Not Started,,,"Delivers questions (MCQ, true/false, subjective) for active attempt"
+,Global LMS,7. Online Exams & Quizzes,Exam Auto-save Draft Answer,Save Draft Answer (Autosave),PATCH,/exams/{examId}/answers,Not Tested,Not Started,,,Auto-saves individual answer drafts during live test
+,Global LMS,7. Online Exams & Quizzes,Exam Final Submit Screen,Submit Exam Attempt,POST,/exams/{examId}/submit,Not Tested,Not Started,,,Final submission of all answers; closes timer and attempt
+,Global LMS,7. Online Exams & Quizzes,Exam Attempt History Screen,Get My Attempt History for Exam,GET,/exams/{examId}/attempts,Not Tested,Not Started,,,List of previous student attempts and status
+,Global LMS,7. Online Exams & Quizzes,Exam Review & Answer Key Screen,Review Specific Attempt & Answers,GET,/exams/{examId}/attempts/{attemptId}/review,Not Tested,Not Started,,,Question-by-question review with faculty feedback and answer keys
+,Global LMS,7. Online Exams & Quizzes,Exam Result Scorecard Screen,Get Final Exam Result,GET,/exams/{examId}/my-result,Not Tested,Not Started,,,"Final score, grade letter, percentile, and pass/fail verdict"
+,Global LMS,8. Results & Transcripts,Student Cumulative Results Screen,Get Student Cumulative Results,GET,/results/student,Not Tested,Not Started,,,"Cumulative GPA, total earned credits, and term standings"
+,Global LMS,8. Results & Transcripts,All Exam Attempts History Screen,Get All Student Exam Attempts,GET,/results/student/attempts,Not Tested,Not Started,,,Complete historical log of all exam attempts and marks
+,Global LMS,8. Results & Transcripts,Video Quiz Performance Screen,Get All Video Quiz Results,GET,/results/student/video-quizzes,Not Tested,Not Started,,,Overall video quiz marks across all enrolled subjects
+,Global LMS,8. Results & Transcripts,Official Grade Transcript Screen,Get My Official Grades / Transcript,GET,/transcripts/my-grades,Not Tested,Not Started,,,Official semester-by-semester transcript breakdown
+,Global LMS,8. Results & Transcripts,Cyclic Semester Status Screen,Get Cyclic Semester Status,GET,/semesters/student/{studentId}/cyclic-status?programId={programId},Not Tested,Not Started,,,Cyclic rotation curriculum progress and eligible next terms
+,Global LMS,9. Certificates,My Certificates Screen,Get My Issued Certificates,GET,/certificates/my-certificates,Not Tested,Not Started,,,List of awarded degree and course completion certificates
+,Global LMS,9. Certificates,Certificate Preview & Download Screen,Get Certificate by ID,GET,/certificates/{certificateId},Not Tested,Not Started,,,Certificate verification metadata and high-res PDF download URL
+,Global LMS,9. Certificates,Certificate Request Screen,Request Certificate for Course,POST,/certificates/request,Not Tested,Not Started,,,Dispatches certificate generation request upon 100% course completion
+,Global LMS,10. Live Interactive Sessions,Upcoming Live Sessions Screen,Get Upcoming Live Calls for Student,GET,/live-sessions/student/upcoming,Not Tested,Not Started,,,Upcoming Zoom/Teams/WebRTC live class links and schedules
+,Global LMS,10. Live Interactive Sessions,Live Virtual Classes & Archive Screen,List Live Sessions,GET,/live-sessions,Not Tested,Not Started,,,Filterable live webinars and past recorded class archives
+,Global LMS,11. Discussions & Chat,Discussion Inbox & Chats Screen,Get Inbox Conversations,GET,/discussion/inbox,Not Tested,Not Started,,,"Recent active direct chats, course threads, and unread counts"
+,Global LMS,11. Discussions & Chat,Contacts Directory Screen,"Get Contacts (Faculty, Admins, Peers)",GET,/discussion/contacts,Not Tested,Not Started,,,"Directory of classmates, faculty advisors, and department heads"
+,Global LMS,11. Discussions & Chat,Direct 1:1 Chat Screen,Start or Open Direct 1:1 Chat,POST,/discussion/direct-thread,Not Tested,Not Started,,,Creates or resumes 1:1 conversation with professor or peer
+,Global LMS,11. Discussions & Chat,Course Discussion Group Screen,Open or Join Course Discussion Thread,POST,/discussion/course-thread,Not Tested,Not Started,,,Group chat thread for all students enrolled in specific course
+,Global LMS,11. Discussions & Chat,Batch Discussion Group Screen,Open or Join Batch Discussion Thread,POST,/discussion/batch-thread,Not Tested,Not Started,,,Cohort-wide discussion forum for academic batch
+,Global LMS,11. Discussions & Chat,Chat Thread Messages Screen,Get Thread Messages,GET,/discussion/threads/{threadId}/messages,Not Tested,Not Started,,,Paginated historical messages inside selected chat channel
+,Global LMS,11. Discussions & Chat,Chat Send Message Action,Send Message in Thread,POST,/discussion/threads/{threadId}/messages,Not Tested,Not Started,,,"Sends text message, attachments, or mentions in thread"
+,Global LMS,11. Discussions & Chat,Course Q&A Forum Screen,Course Q&A Forum: List Threads,GET,/discussion/courses/{courseId}/threads,Not Tested,Not Started,,,Lists question threads posted by students per course/lesson
+,Global LMS,11. Discussions & Chat,Create Q&A Forum Thread Screen,Course Q&A Forum: Create Thread,POST,/discussion/courses/{courseId}/threads,Not Tested,Not Started,,,Publishes a new academic doubt/question for instructor
+,Global LMS,11. Discussions & Chat,Q&A Forum Reply Screen,Course Q&A Forum: Reply to Thread,POST,/discussion/threads/{threadId}/replies,Not Tested,Not Started,,,Posts instructor answer or peer explanation to forum question
+,Global LMS,12. Notifications,Notifications List Screen,Get Notifications (Paginated),GET,/notifications?page=1&limit=20,Not Tested,Not Started,,,Student push/in-app notification stream with read status
+,Global LMS,12. Notifications,Dashboard / Header Notification Bell,Get Unread Count,GET,/notifications/unread-count,Not Tested,Not Started,,,Badge count displayed on dashboard bell icon
+,Global LMS,12. Notifications,Notification Mark As Read Action,Mark Notification as Read,PATCH,/notifications/{notificationId}/read,Not Tested,Not Started,,,Marks specific notification item as acknowledged
+,Global LMS,12. Notifications,Notifications / Mark All Read Action,Mark All Notifications as Read,POST,/notifications/mark-all-read,Not Tested,Not Started,,,Clears all unread badges across the account
+,Global LMS,13. Payments & Invoices,Payments & Fee History Screen,Get My Payments History,GET,/payments/my-payments?page=1&limit=10,Not Tested,Not Started,,,"Tuition fees, course payments, transaction IDs, and receipts"
+,Global LMS,13. Payments & Invoices,Invoice Download / Receipt Screen,Generate / Download Invoice,POST,/payments/{paymentId}/generate-invoice,Not Tested,Not Started,,,Generates PDF tax invoice receipt for student records
+,Global LMS,14. Registration & Public Helper APIs,Registration / Region Dropdown,Get Available Regions for Registration,GET,/regions?slug={orgSlug}&localOnly=true,Not Tested,Not Started,,,Populates geographical pricing and regional admission zones
+,Global LMS,14. Registration & Public Helper APIs,Registration / Program Dropdown,Get Available Programs for Registration,GET,/programs/public?limit=100&slug={orgSlug},Not Tested,Not Started,,,Public degree tracks for applicant selection
+,Global LMS,14. Registration & Public Helper APIs,Registration / Dynamic Form Questions,Get Dynamic Registration Form Questions,GET,/form-questions,Not Tested,Not Started,,,Returns customized theological and church background questionnaire
+,Global LMS,14. Registration & Public Helper APIs,Registration / Document Upload Screen,Upload Public Verification Document / Photo,POST,/upload/public?folder=profiles,Not Tested,Not Started,,,Unauthenticated pre-registration document upload (Max 5MB)
+,Global LMS,14. Registration & Public Helper APIs,Assignments / File Upload Screen,Upload Authenticated Student File,POST,/upload?folder=submissions,Not Tested,Not Started,,,Authenticated file upload for assignments and transcripts (Max 25MB)
+,Global LMS,14. Registration & Public Helper APIs,Public Organization Branding Screen,Get Public Organization Info by Slug,GET,/public/organizations/{orgSlug},Not Tested,Not Started,,,"Organization branding, name, logoUrl, and portal settings"
+,Global LMS,,,,,,Not Tested,Not Started,,,
+,Global LMS,,,,,,Not Tested,Not Started,,,
+,Global LMS,,,,,,Not Tested,Not Started,,,
+,Global LMS,,,,,,Not Tested,Not Started,,,
+,Global LMS,,,,,,Not Tested,Not Started,,,
+,Global LMS,,,,,,Not Tested,Not Started,,,
+,Global LMS,,,,,,Not Tested,Not Started,,,
+,Global LMS,,,,,,Not Tested,Not Started,,,
+,Global LMS,,,,,,Not Tested,Not Started,,,
+,Global LMS,,,,,,Not Tested,Not Started,,,

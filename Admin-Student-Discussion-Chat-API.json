@@ -1,0 +1,624 @@
+{
+  "info": {
+    "_postman_id": "7b8e5192-3a5f-4d91-b924-4f5c9e2b189a",
+    "name": "Admin-Student-Discussion-Chat-API",
+    "description": "Complete Discussion & Real-Time Chat API Collection for Global LMS connecting Admin and Students. Includes Private 1:1 Chat, Group Discussions, Discussion Forums, Threaded Replies, Admin Moderation, Real-Time Presence, Typing Indicators, and Notifications.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://launchpaad.tech/macslearnbackend/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "supportApiUrl",
+      "value": "https://api.raoslawacademy.com",
+      "type": "string"
+    },
+    {
+      "key": "studentToken",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjQyMzdjNWJiLTMwZDEtNDk1YS05NmY4LWQ3MGJhNDhlYzExMCIsInJvbGUiOiJzdHVkZW50In0",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImFkbWluLW1haW4iLCJyb2xlIjoiYWRtaW4ifQ",
+      "type": "string"
+    },
+    {
+      "key": "threadId",
+      "value": "conv-admin-direct",
+      "type": "string"
+    },
+    {
+      "key": "topicId",
+      "value": "topic-announcement-1",
+      "type": "string"
+    },
+    {
+      "key": "studentId",
+      "value": "4237c5bb-30d1-495a-96f8-d70ba48ec110",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Users & Roster API",
+      "item": [
+        {
+          "name": "1.1 Fetch Registered Students Roster (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/chat-roster?role=student&page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "chat-roster"],
+              "query": [
+                { "key": "role", "value": "student" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "description": "Admin retrieves the complete roster of registered students with contact details, active enrollment program, and online status."
+          },
+          "response": [
+            {
+              "name": "Successful Roster Fetch",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"total\": 5,\n  \"page\": 1,\n  \"students\": [\n    {\n      \"id\": \"4237c5bb-30d1-495a-96f8-d70ba48ec110\",\n      \"name\": \"Student\",\n      \"email\": \"student@global.lms\",\n      \"mobile\": \"+91 98765 43210\",\n      \"enrolledProgram\": \"Master of Divinity (M.Div)\",\n      \"avatarLetter\": \"S\",\n      \"isOnline\": true\n    },\n    {\n      \"id\": \"stu-varsha-01\",\n      \"name\": \"Varsha K\",\n      \"email\": \"varsha@global.lms\",\n      \"mobile\": \"+91 98765 43211\",\n      \"enrolledProgram\": \"Master of Divinity (M.Div)\",\n      \"avatarLetter\": \"V\",\n      \"isOnline\": true\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "1.2 Search Admins and Students",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/search?q=admin",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "search"],
+              "query": [
+                { "key": "q", "value": "admin" }
+              ]
+            },
+            "description": "Search for administrative officers, faculty, or students by name, email, or department."
+          },
+          "response": [
+            {
+              "name": "Search Results",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"users\": [\n    {\n      \"id\": \"admin-main\",\n      \"name\": \"Academic Admin\",\n      \"role\": \"admin\",\n      \"email\": \"admissions@cotr.edu\",\n      \"isOnline\": true\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Conversations API",
+      "item": [
+        {
+          "name": "2.1 Start 1:1 Private Conversation (Admin or Student)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetUserId\": \"{{studentId}}\",\n  \"initialMessage\": \"Hello! Academic administration is here to assist with your coursework.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/discussion/direct-thread",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "direct-thread"]
+            },
+            "description": "Creates or retrieves an existing 1:1 private direct conversation thread between Admin and Student."
+          },
+          "response": [
+            {
+              "name": "Direct Thread Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"thread\": {\n    \"id\": \"conv-admin-direct\",\n    \"title\": \"Admin\",\n    \"type\": \"direct\",\n    \"status\": \"active\",\n    \"participants\": [\n      { \"id\": \"admin-main\", \"name\": \"Admin\", \"role\": \"admin\", \"isOnline\": true },\n      { \"id\": \"{{studentId}}\", \"name\": \"Student\", \"role\": \"student\", \"isOnline\": true }\n    ],\n    \"lastMessage\": \"Hello! Academic administration is here to assist with your coursework.\",\n    \"lastMessageAt\": \"10:30 AM\",\n    \"unreadCount\": 1\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "2.2 Get User Inbox (Conversations List & Unread Badges)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/discussion/inbox",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "inbox"]
+            },
+            "description": "Fetches all recent active conversations with unread message counts, last messages, and timestamps."
+          },
+          "response": [
+            {
+              "name": "Inbox List",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"totalUnread\": 1,\n  \"conversations\": [\n    {\n      \"id\": \"conv-admin-direct\",\n      \"title\": \"Admin\",\n      \"type\": \"direct\",\n      \"lastMessage\": \"Welcome! Let us know if you need help.\",\n      \"lastMessageAt\": \"10:30 AM\",\n      \"unreadCount\": 1,\n      \"pinned\": true,\n      \"participants\": [\n        { \"id\": \"admin-main\", \"name\": \"Admin\", \"role\": \"admin\", \"isOnline\": true }\n      ]\n    },\n    {\n      \"id\": \"conv-student-group\",\n      \"title\": \"Student Group\",\n      \"type\": \"group\",\n      \"lastMessage\": \"Let's discuss the upcoming assignment.\",\n      \"lastMessageAt\": \"09:15 AM\",\n      \"unreadCount\": 0,\n      \"pinned\": false,\n      \"participants\": [\n        { \"id\": \"stu-varsha-01\", \"name\": \"Varsha\", \"role\": \"student\", \"isOnline\": true }\n      ]\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Messages & Moderation API",
+      "item": [
+        {
+          "name": "3.1 Send Message in Thread",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Thank you! Could you please clarify the due date for Module 1 readings?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/discussion/threads/{{threadId}}/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "threads", "{{threadId}}", "messages"]
+            },
+            "description": "Sends a message in an existing direct or group discussion thread."
+          },
+          "response": [
+            {
+              "name": "Message Sent",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": {\n    \"id\": \"msg-1712000000\",\n    \"threadId\": \"conv-admin-direct\",\n    \"senderId\": \"{{studentId}}\",\n    \"senderName\": \"Student\",\n    \"senderRole\": \"student\",\n    \"message\": \"Thank you! Could you please clarify the due date for Module 1 readings?\",\n    \"createdAt\": \"10:32 AM\",\n    \"isRead\": false,\n    \"isDeleted\": false\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "3.2 Fetch Conversation Messages Stream",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/discussion/threads/{{threadId}}/messages?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "threads", "{{threadId}}", "messages"],
+              "query": [
+                { "key": "limit", "value": "50" }
+              ]
+            },
+            "description": "Retrieves the message history for a given conversation."
+          },
+          "response": [
+            {
+              "name": "Messages History",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"messages\": [\n    {\n      \"id\": \"msg-adm-1\",\n      \"threadId\": \"conv-admin-direct\",\n      \"senderId\": \"admin-main\",\n      \"senderName\": \"Admin\",\n      \"senderRole\": \"admin\",\n      \"message\": \"Welcome! Let us know if you need help.\",\n      \"createdAt\": \"10:30 AM\",\n      \"isRead\": true\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "3.3 Mark Thread Messages as Read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/discussion/threads/{{threadId}}/read",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "threads", "{{threadId}}", "read"]
+            },
+            "description": "Marks all messages in the conversation thread as read, resetting unread counter to 0 and providing read receipts."
+          },
+          "response": [
+            {
+              "name": "Marked Read",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"unreadCount\": 0\n}"
+            }
+          ]
+        },
+        {
+          "name": "3.4 Admin Moderate / Delete Message",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/discussion/threads/{{threadId}}/messages/msg-grp-1",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "threads", "{{threadId}}", "messages", "msg-grp-1"]
+            },
+            "description": "Admin capability to moderate or delete inappropriate content in direct or group chats. Soft-deletes and replaces text with [Message deleted by Admin]."
+          },
+          "response": [
+            {
+              "name": "Message Moderated",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"messageId\": \"msg-grp-1\",\n  \"isDeleted\": true,\n  \"notice\": \"[Message deleted by Admin]\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Discussion Forum API",
+      "item": [
+        {
+          "name": "4.1 Fetch Forum Topics (Filtered & Pinned)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/discussion/topics?category=All&search=",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "topics"],
+              "query": [
+                { "key": "category", "value": "All" },
+                { "key": "search", "value": "" }
+              ]
+            },
+            "description": "Fetches discussion forum topics with category filtering (Announcements, General, Assignments, Exams, Curriculum, Q&A) with pinned items first."
+          },
+          "response": [
+            {
+              "name": "Forum Topics List",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"topics\": [\n    {\n      \"id\": \"topic-announcement-1\",\n      \"title\": \"Academic Integrity & Course Submission Guidelines\",\n      \"content\": \"Welcome to the Global LMS academic term. Plagiarism checks are strictly enforced.\",\n      \"category\": \"Announcements\",\n      \"authorName\": \"Admin Office\",\n      \"authorRole\": \"admin\",\n      \"createdAt\": \"Today, 08:00 AM\",\n      \"replyCount\": 2,\n      \"isPinned\": true\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "4.2 Create New Discussion Topic",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Question regarding Biblical Hermeneutics Final Essay\",\n  \"category\": \"Assignments\",\n  \"content\": \"Could anyone share recommended secondary academic sources for Section 3?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/discussion/topics",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "topics"]
+            },
+            "description": "Student or Admin creates a new discussion topic in the selected forum category."
+          },
+          "response": [
+            {
+              "name": "Topic Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"topic\": {\n    \"id\": \"topic-1712000000\",\n    \"title\": \"Question regarding Biblical Hermeneutics Final Essay\",\n    \"category\": \"Assignments\",\n    \"authorName\": \"Student\",\n    \"authorRole\": \"student\",\n    \"replyCount\": 0,\n    \"isPinned\": false\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "4.3 Reply to Discussion Topic",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"I recommend checking the digital theological library linked in Module 2 resources!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/discussion/topics/{{topicId}}/replies",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "topics", "{{topicId}}", "replies"]
+            },
+            "description": "Adds a threaded reply to an existing discussion forum topic."
+          },
+          "response": [
+            {
+              "name": "Reply Added",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"reply\": {\n    \"id\": \"reply-1712000000\",\n    \"topicId\": \"{{topicId}}\",\n    \"authorName\": \"Student\",\n    \"content\": \"I recommend checking the digital theological library linked in Module 2 resources!\",\n    \"createdAt\": \"Just now\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "4.4 Admin Toggle Pin Topic",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/discussion/topics/{{topicId}}/pin",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "topics", "{{topicId}}", "pin"]
+            },
+            "description": "Admin pins or unpins high-priority discussions to keep them at the top of the forum."
+          },
+          "response": [
+            {
+              "name": "Pin Toggled",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"topicId\": \"{{topicId}}\",\n  \"isPinned\": true\n}"
+            }
+          ]
+        },
+        {
+          "name": "4.5 Admin Delete Discussion Topic",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/discussion/topics/{{topicId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "topics", "{{topicId}}"]
+            },
+            "description": "Admin moderates and deletes spam or inappropriate discussion topics."
+          },
+          "response": [
+            {
+              "name": "Topic Deleted",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Discussion topic removed successfully.\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Group Discussions & Announcements API",
+      "item": [
+        {
+          "name": "5.1 Admin Create Group Discussion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"M.Div Fall 2026 Cohort Discussion\",\n  \"description\": \"Group chat for all students enrolled in Master of Divinity.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/discussion/groups",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "groups"]
+            },
+            "description": "Admin creates a new group discussion thread."
+          },
+          "response": [
+            {
+              "name": "Group Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"group\": {\n    \"id\": \"group-1712000000\",\n    \"title\": \"M.Div Fall 2026 Cohort Discussion\",\n    \"type\": \"group\",\n    \"isGroup\": true,\n    \"lastMessage\": \"Group discussion created\",\n    \"participantsCount\": 25\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "5.2 Admin Broadcast Announcement to All Students",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Live Virtual Seminar This Friday\",\n  \"message\": \"The live classroom link for Historical Theology will open at 10:00 AM IST.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/discussion/announcements/broadcast",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "announcements", "broadcast"]
+            },
+            "description": "Broadcasts a high-priority announcement pinned to the discussion forum, sent to group chats, and delivered via notifications."
+          },
+          "response": [
+            {
+              "name": "Announcement Broadcasted",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"broadcastId\": \"bc-1712000000\",\n  \"recipientsCount\": 120,\n  \"forumTopicCreated\": true\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Real-Time Presence & Typing Indicators",
+      "item": [
+        {
+          "name": "6.1 Update Online Presence (Heartbeat)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"online\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/discussion/realtime/presence",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "realtime", "presence"]
+            },
+            "description": "Sends periodic presence heartbeat to maintain active green dot indicator."
+          },
+          "response": [
+            {
+              "name": "Presence Updated",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"isOnline\": true,\n  \"lastSeen\": \"2026-11-10T06:30:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "6.2 Broadcast Typing Indicator",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"threadId\": \"{{threadId}}\",\n  \"isTyping\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/discussion/realtime/typing",
+              "host": ["{{baseUrl}}"],
+              "path": ["discussion", "realtime", "typing"]
+            },
+            "description": "Notifies other thread participants that the user is typing."
+          },
+          "response": [
+            {
+              "name": "Typing Event Broadcasted",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
