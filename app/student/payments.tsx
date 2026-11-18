@@ -453,11 +453,22 @@ const styles = StyleSheet.create({
   },
   paymentCard: {
     backgroundColor: '#1E293B',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#334155',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   cardHeaderRow: {
     flexDirection: 'row',

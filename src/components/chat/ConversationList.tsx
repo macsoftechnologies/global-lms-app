@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { ChatConversation, ChatRole } from '../../types/chat';
 import { NotificationBadge } from './NotificationBadge';
+import { useTheme } from '../../context/ThemeContext';
 
 type FilterCategory = 'ALL' | 'STAFF' | 'DIRECT' | 'SUBJECTS' | 'BATCHES';
 
@@ -33,6 +34,29 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   onRefresh,
   refreshing = false,
 }) => {
+  const { isDarkMode } = useTheme();
+  const styles = React.useMemo(() => {
+    if (!isDarkMode) return baseStyles;
+    return {
+      ...baseStyles,
+      container: StyleSheet.flatten([baseStyles.container, { backgroundColor: '#0B0F19' }]) as typeof baseStyles.container,
+      searchBox: StyleSheet.flatten([baseStyles.searchBox, { backgroundColor: '#1E293B', borderColor: '#334155' }]) as typeof baseStyles.searchBox,
+      searchInput: StyleSheet.flatten([baseStyles.searchInput, { color: '#F8FAFC' }]) as typeof baseStyles.searchInput,
+      categoriesContainer: StyleSheet.flatten([baseStyles.categoriesContainer, { borderBottomColor: '#1F2937' }]) as typeof baseStyles.categoriesContainer,
+      categoryPill: StyleSheet.flatten([baseStyles.categoryPill, { backgroundColor: '#1E293B' }]) as typeof baseStyles.categoryPill,
+      categoryPillText: StyleSheet.flatten([baseStyles.categoryPillText, { color: '#94A3B8' }]) as typeof baseStyles.categoryPillText,
+      itemContainer: StyleSheet.flatten([baseStyles.itemContainer, { borderBottomColor: '#1F2937' }]) as typeof baseStyles.itemContainer,
+      itemSelected: StyleSheet.flatten([baseStyles.itemSelected, { backgroundColor: '#1E1B4B' }]) as typeof baseStyles.itemSelected,
+      itemPinned: StyleSheet.flatten([baseStyles.itemPinned, { backgroundColor: '#1A1826' }]) as typeof baseStyles.itemPinned,
+      titleText: StyleSheet.flatten([baseStyles.titleText, { color: '#F8FAFC' }]) as typeof baseStyles.titleText,
+      timeText: StyleSheet.flatten([baseStyles.timeText, { color: '#64748B' }]) as typeof baseStyles.timeText,
+      messageSnippet: StyleSheet.flatten([baseStyles.messageSnippet, { color: '#94A3B8' }]) as typeof baseStyles.messageSnippet,
+      messageSnippetUnread: StyleSheet.flatten([baseStyles.messageSnippetUnread, { color: '#F8FAFC' }]) as typeof baseStyles.messageSnippetUnread,
+      emptyTitle: StyleSheet.flatten([baseStyles.emptyTitle, { color: '#E2E8F0' }]) as typeof baseStyles.emptyTitle,
+      emptySubtitle: StyleSheet.flatten([baseStyles.emptySubtitle, { color: '#94A3B8' }]) as typeof baseStyles.emptySubtitle,
+    };
+  }, [isDarkMode]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<FilterCategory>('ALL');
 
@@ -293,7 +317,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',

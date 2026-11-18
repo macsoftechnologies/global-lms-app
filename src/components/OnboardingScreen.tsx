@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AuthStorage } from '../services/authStorage';
+import { useTheme } from '../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
@@ -75,6 +76,7 @@ const SLIDES: SlideData[] = [
 ];
 
 export default function OnboardingScreen({ onFinish }: OnboardingScreenProps) {
+  const { isDarkMode } = useTheme();
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
 
   const handleNext = async () => {
@@ -102,18 +104,18 @@ export default function OnboardingScreen({ onFinish }: OnboardingScreenProps) {
   const isLastSlide = currentSlideIndex === SLIDES.length - 1;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: '#0B0F19' }]}>
       {/* Top Header with Skip Button */}
       <View style={styles.topHeader}>
-        <View style={styles.stepBadge}>
-          <Text style={styles.stepBadgeText}>
+        <View style={[styles.stepBadge, isDarkMode && { backgroundColor: '#1E1B4B' }]}>
+          <Text style={[styles.stepBadgeText, isDarkMode && { color: '#A5B4FC' }]}>
             {currentSlideIndex + 1} of {SLIDES.length}
           </Text>
         </View>
         {!isLastSlide ? (
           <TouchableOpacity style={styles.skipButton} onPress={handleSkip} activeOpacity={0.7}>
-            <Text style={styles.skipButtonText}>Skip</Text>
-            <Ionicons name="chevron-forward" size={14} color="#64748B" />
+            <Text style={[styles.skipButtonText, isDarkMode && { color: '#94A3B8' }]}>Skip</Text>
+            <Ionicons name="chevron-forward" size={14} color={isDarkMode ? '#94A3B8' : '#64748B'} />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 60 }} />
@@ -132,10 +134,16 @@ export default function OnboardingScreen({ onFinish }: OnboardingScreenProps) {
         </View>
 
         {/* Education Illustration Box */}
-        <View style={[styles.illustrationCard, { borderColor: `${currentSlide.accentColor}25` }]}>
-          <View style={[styles.illustrationCircle, { backgroundColor: `${currentSlide.accentColor}12` }]}>
+        <View
+          style={[
+            styles.illustrationCard,
+            isDarkMode && { backgroundColor: '#161F30' },
+            { borderColor: isDarkMode ? `${currentSlide.accentColor}45` : `${currentSlide.accentColor}25` },
+          ]}
+        >
+          <View style={[styles.illustrationCircle, { backgroundColor: isDarkMode ? `${currentSlide.accentColor}22` : `${currentSlide.accentColor}12` }]}>
             <Ionicons name={currentSlide.primaryIcon} size={64} color={currentSlide.accentColor} />
-            <View style={[styles.secondaryBadge, { backgroundColor: currentSlide.accentColor }]}>
+            <View style={[styles.secondaryBadge, { backgroundColor: currentSlide.accentColor }, isDarkMode && { borderColor: '#161F30' }]}>
               <MaterialCommunityIcons name={currentSlide.secondaryIcon} size={22} color="#FFFFFF" />
             </View>
           </View>
@@ -143,8 +151,14 @@ export default function OnboardingScreen({ onFinish }: OnboardingScreenProps) {
           {/* Feature Pill Tags */}
           <View style={styles.featureTagsRow}>
             {currentSlide.featureTags.map((tag, i) => (
-              <View key={i} style={[styles.featureTag, { backgroundColor: currentSlide.badgeBg }]}>
-                <Text style={[styles.featureTagText, { color: currentSlide.badgeColor }]}>{tag}</Text>
+              <View
+                key={i}
+                style={[
+                  styles.featureTag,
+                  { backgroundColor: isDarkMode ? `${currentSlide.accentColor}25` : currentSlide.badgeBg },
+                ]}
+              >
+                <Text style={[styles.featureTagText, { color: isDarkMode ? currentSlide.subAccent : currentSlide.badgeColor }]}>{tag}</Text>
               </View>
             ))}
           </View>
@@ -152,14 +166,14 @@ export default function OnboardingScreen({ onFinish }: OnboardingScreenProps) {
 
         {/* Slide Copy */}
         <View style={styles.textContainer}>
-          <View style={[styles.categoryPill, { backgroundColor: currentSlide.badgeBg }]}>
-            <Text style={[styles.categoryPillText, { color: currentSlide.badgeColor }]}>
+          <View style={[styles.categoryPill, { backgroundColor: isDarkMode ? `${currentSlide.accentColor}25` : currentSlide.badgeBg }]}>
+            <Text style={[styles.categoryPillText, { color: isDarkMode ? currentSlide.subAccent : currentSlide.badgeColor }]}>
               {currentSlide.badge}
             </Text>
           </View>
 
-          <Text style={styles.title}>{currentSlide.title}</Text>
-          <Text style={styles.description}>{currentSlide.description}</Text>
+          <Text style={[styles.title, isDarkMode && { color: '#F8FAFC' }]}>{currentSlide.title}</Text>
+          <Text style={[styles.description, isDarkMode && { color: '#94A3B8' }]}>{currentSlide.description}</Text>
         </View>
       </View>
 
@@ -176,7 +190,7 @@ export default function OnboardingScreen({ onFinish }: OnboardingScreenProps) {
                   styles.dot,
                   isActive
                     ? [styles.activeDot, { backgroundColor: currentSlide.accentColor }]
-                    : styles.inactiveDot,
+                    : [styles.inactiveDot, isDarkMode && { backgroundColor: '#334155' }],
                 ]}
               />
             );
@@ -187,11 +201,11 @@ export default function OnboardingScreen({ onFinish }: OnboardingScreenProps) {
         <View style={styles.buttonRow}>
           {currentSlideIndex > 0 && (
             <TouchableOpacity
-              style={styles.prevButton}
+              style={[styles.prevButton, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
               onPress={() => setCurrentSlideIndex((prev) => Math.max(0, prev - 1))}
               activeOpacity={0.8}
             >
-              <Ionicons name="arrow-back" size={20} color="#64748B" />
+              <Ionicons name="arrow-back" size={20} color={isDarkMode ? '#E2E8F0' : '#64748B'} />
             </TouchableOpacity>
           )}
 
@@ -272,7 +286,8 @@ const styles = StyleSheet.create({
     height: 90,
   },
   illustrationCard: {
-    width: width - 48,
+    width: '100%',
+    maxWidth: Math.min(width - 40, 420),
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     paddingVertical: 24,

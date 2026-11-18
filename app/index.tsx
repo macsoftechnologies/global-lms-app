@@ -4,8 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthStorage } from '../src/services/authStorage';
 import OnboardingScreen from '../src/components/OnboardingScreen';
 import StudentLoginScreen from './student/login';
+import { useTheme } from '../src/context/ThemeContext';
 
 export default function IndexScreen() {
+  const { isDarkMode } = useTheme();
   const [isLoading, setIsLoading] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
@@ -31,13 +33,13 @@ export default function IndexScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.splashContainer}>
+      <SafeAreaView style={[styles.splashContainer, isDarkMode && { backgroundColor: '#0B0F19' }]}>
         <Image
           source={require('../assets/logo.png')}
           style={styles.splashLogo}
           resizeMode="contain"
         />
-        <ActivityIndicator size="large" color="#4F46E5" style={styles.loader} />
+        <ActivityIndicator size="large" color={isDarkMode ? '#818CF8' : '#4F46E5'} style={styles.loader} />
       </SafeAreaView>
     );
   }

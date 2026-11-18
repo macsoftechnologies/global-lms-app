@@ -19,8 +19,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { LmsAuthService } from '../../src/services/lmsAuthService';
 import { AuthStorage } from '../../src/services/authStorage';
 import { ENV } from '../../src/config/env';
+import { useTheme } from '../../src/context/ThemeContext';
 
 export default function StudentLoginScreen() {
+  const { isDarkMode } = useTheme();
   const params = useLocalSearchParams<{ email?: string; organizationCode?: string }>();
 
   const [organizationCode, setOrganizationCode] = useState(
@@ -141,8 +143,8 @@ export default function StudentLoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: '#0B0F19' }]}>
+      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -155,13 +157,13 @@ export default function StudentLoginScreen() {
           {/* Top Bar Switch / Navigation */}
           <View style={styles.topBar}>
             <TouchableOpacity
-              style={styles.portalSwitchBtn}
+              style={[styles.portalSwitchBtn, isDarkMode && { backgroundColor: '#1E293B' }]}
               onPress={() => router.push('/portal-select')}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               activeOpacity={0.7}
             >
-              <Ionicons name="apps-outline" size={18} color="#475569" />
-              <Text style={styles.portalSwitchText}>Portals</Text>
+              <Ionicons name="apps-outline" size={18} color={isDarkMode ? '#94A3B8' : '#475569'} />
+              <Text style={[styles.portalSwitchText, isDarkMode && { color: '#CBD5E1' }]}>Portals</Text>
             </TouchableOpacity>
           </View>
 
@@ -174,12 +176,12 @@ export default function StudentLoginScreen() {
                 resizeMode="contain"
               />
             </View>
-            <Text style={styles.institutionName}>GLOBAL LMS</Text>
-            <Text style={styles.institutionSubName}>Church on the Rock • India</Text>
+            <Text style={[styles.institutionName, isDarkMode && { color: '#F8FAFC' }]}>GLOBAL LMS</Text>
+            <Text style={[styles.institutionSubName, isDarkMode && { color: '#94A3B8' }]}>Church on the Rock • India</Text>
           </View>
 
           {/* Main Login Card matching user reference image */}
-          <View style={styles.card}>
+          <View style={[styles.card, isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' }]}>
             {/* Top Gradient Border Accent Bar */}
             <View style={styles.cardHeaderAccent}>
               <View style={[styles.gradientBar, { backgroundColor: '#4F46E5' }]} />
@@ -191,27 +193,31 @@ export default function StudentLoginScreen() {
 
             <View style={styles.cardInnerPadding}>
               {/* Pill Badge: SIGN IN */}
-              <View style={styles.pillBadge}>
-                <Text style={styles.pillBadgeText}>SIGN IN</Text>
+              <View style={[styles.pillBadge, isDarkMode && { backgroundColor: '#1E1B4B' }]}>
+                <Text style={[styles.pillBadgeText, isDarkMode && { color: '#A5B4FC' }]}>SIGN IN</Text>
               </View>
 
               {/* Heading: Welcome back */}
-              <Text style={styles.cardTitle}>Welcome back</Text>
+              <Text style={[styles.cardTitle, isDarkMode && { color: '#F8FAFC' }]}>Welcome back</Text>
 
               {/* Subtitle: Enter your organization credentials to continue. */}
-              <Text style={styles.cardSubtitle}>
+              <Text style={[styles.cardSubtitle, isDarkMode && { color: '#94A3B8' }]}>
                 Enter your organization credentials to continue.
               </Text>
 
               {/* ORGANIZATION CODE * */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.label}>
+                <Text style={[styles.label, isDarkMode && { color: '#CBD5E1' }]}>
                   ORGANIZATION CODE <Text style={styles.asterisk}>*</Text>
                 </Text>
                 <TextInput
-                  style={[styles.input, Boolean(orgError) && styles.inputErrorBorder]}
+                  style={[
+                    styles.input,
+                    isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', color: '#F8FAFC' },
+                    Boolean(orgError) && styles.inputErrorBorder,
+                  ]}
                   placeholder="org1"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
                   autoCapitalize="none"
                   autoCorrect={false}
                   value={organizationCode}
@@ -225,13 +231,17 @@ export default function StudentLoginScreen() {
 
               {/* EMAIL * */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.label}>
+                <Text style={[styles.label, isDarkMode && { color: '#CBD5E1' }]}>
                   EMAIL <Text style={styles.asterisk}>*</Text>
                 </Text>
                 <TextInput
-                  style={[styles.input, Boolean(emailError) && styles.inputErrorBorder]}
+                  style={[
+                    styles.input,
+                    isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', color: '#F8FAFC' },
+                    Boolean(emailError) && styles.inputErrorBorder,
+                  ]}
                   placeholder="you@organization.com"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -246,19 +256,20 @@ export default function StudentLoginScreen() {
 
               {/* PASSWORD * */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.label}>
+                <Text style={[styles.label, isDarkMode && { color: '#CBD5E1' }]}>
                   PASSWORD <Text style={styles.asterisk}>*</Text>
                 </Text>
                 <View
                   style={[
                     styles.passwordContainer,
+                    isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
                     Boolean(passwordError) && styles.inputErrorBorder,
                   ]}
                 >
                   <TextInput
-                    style={styles.passwordInput}
+                    style={[styles.passwordInput, isDarkMode && { color: '#F8FAFC' }]}
                     placeholder="••••••••"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
                     secureTextEntry={!showPassword}
                     value={password}
                     onChangeText={(text) => {
@@ -300,19 +311,31 @@ export default function StudentLoginScreen() {
               </TouchableOpacity>
 
               {/* Divider Line */}
-              <View style={styles.divider} />
+              <View style={[styles.divider, isDarkMode && { backgroundColor: '#1F2937' }]} />
 
               {/* New student? Register here */}
               <View style={styles.footerRow}>
-                <Text style={styles.footerText}>New student? </Text>
-                <TouchableOpacity onPress={() => router.push('/student/register')} activeOpacity={0.7}>
+                <Text style={[styles.footerText, isDarkMode && { color: '#94A3B8' }]}>New student? </Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    router.push(
+                      organizationCode.trim()
+                        ? {
+                            pathname: '/student/register',
+                            params: { organizationCode: organizationCode.trim() },
+                          }
+                        : '/student/register'
+                    )
+                  }
+                  activeOpacity={0.7}
+                >
                   <Text style={styles.registerLink}>Register here</Text>
                 </TouchableOpacity>
               </View>
 
               {/* Faculty Portal Link */}
               <View style={[styles.footerRow, { marginTop: 14 }]}>
-                <Text style={styles.footerText}>Faculty member? </Text>
+                <Text style={[styles.footerText, isDarkMode && { color: '#94A3B8' }]}>Faculty member? </Text>
                 <TouchableOpacity onPress={() => router.push('/faculty/login')} activeOpacity={0.7}>
                   <Text style={[styles.registerLink, { color: '#6366F1' }]}>Sign in here</Text>
                 </TouchableOpacity>
@@ -461,7 +484,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 15,
@@ -473,7 +496,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 16,
   },
   passwordInput: {
@@ -495,13 +518,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   signInButton: {
-    backgroundColor: '#5B50F6',
-    borderRadius: 12,
+    backgroundColor: '#4F46E5',
+    borderRadius: 14,
     paddingVertical: 15,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-    shadowColor: '#5B50F6',
+    shadowColor: '#4F46E5',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,

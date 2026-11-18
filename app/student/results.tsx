@@ -348,13 +348,17 @@ export default function StudentResultsScreen() {
       {isLoading ? (
         <View style={styles.centerBox}>
           <ActivityIndicator size="large" color="#4F46E5" />
-          <Text style={styles.loadingText}>Fetching results & transcripts from backend...</Text>
+          <Text style={[styles.loadingText, isDarkMode && { color: '#94A3B8' }]}>
+            Fetching results &amp; transcripts from backend...
+          </Text>
         </View>
       ) : errorMessage ? (
         <View style={styles.centerBox}>
           <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
-          <Text style={styles.errorTitle}>Unable to Load Results</Text>
-          <Text style={styles.errorSub}>{errorMessage}</Text>
+          <Text style={[styles.errorTitle, isDarkMode && { color: '#F8FAFC' }]}>
+            Unable to Load Results
+          </Text>
+          <Text style={[styles.errorSub, isDarkMode && { color: '#94A3B8' }]}>{errorMessage}</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={handleRefresh} activeOpacity={0.8}>
             <Text style={styles.retryBtnText}>Retry Connection</Text>
           </TouchableOpacity>
@@ -379,40 +383,84 @@ export default function StudentResultsScreen() {
               {/* Four Summary Cards matching Website UI */}
               <View style={styles.summaryGrid}>
                 {/* Card 1: Enrolled Degree Program */}
-                <View style={[styles.summaryCard, styles.cardBorderPurple]}>
-                  <Text style={styles.cardEyebrow}>ENROLLED DEGREE PROGRAM</Text>
-                  <Text style={styles.cardHeading} numberOfLines={2}>
+                <View
+                  style={[
+                    styles.summaryCard,
+                    styles.cardBorderPurple,
+                    isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+                  ]}
+                >
+                  <Text style={[styles.cardEyebrow, isDarkMode && { color: '#94A3B8' }]}>
+                    ENROLLED DEGREE PROGRAM
+                  </Text>
+                  <Text
+                    style={[styles.cardHeading, isDarkMode && { color: '#F8FAFC' }]}
+                    numberOfLines={2}
+                  >
                     {progressStats.programTitle}
                   </Text>
                   <Text style={styles.cardSubPurple}>Active Student Status</Text>
                 </View>
 
                 {/* Card 2: Completed Subjects */}
-                <View style={[styles.summaryCard, styles.cardBorderGreen]}>
-                  <Text style={styles.cardEyebrow}>COMPLETED SUBJECTS</Text>
+                <View
+                  style={[
+                    styles.summaryCard,
+                    styles.cardBorderGreen,
+                    isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+                  ]}
+                >
+                  <Text style={[styles.cardEyebrow, isDarkMode && { color: '#94A3B8' }]}>
+                    COMPLETED SUBJECTS
+                  </Text>
                   <View style={styles.valueRow}>
                     <Text style={styles.cardValueGreen}>{progressStats.completedCount}</Text>
-                    <Text style={styles.cardValueTotal}> / {progressStats.totalSubjects}</Text>
+                    <Text style={[styles.cardValueTotal, isDarkMode && { color: '#CBD5E1' }]}>
+                      {' '}
+                      / {progressStats.totalSubjects}
+                    </Text>
                   </View>
-                  <Text style={styles.cardSubGreen}>Passed & Accredited</Text>
+                  <Text style={styles.cardSubGreen}>Passed &amp; Accredited</Text>
                 </View>
 
                 {/* Card 3: Pending / In-Progress */}
-                <View style={[styles.summaryCard, styles.cardBorderOrange]}>
-                  <Text style={styles.cardEyebrow}>PENDING / IN-PROGRESS</Text>
+                <View
+                  style={[
+                    styles.summaryCard,
+                    styles.cardBorderOrange,
+                    isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+                  ]}
+                >
+                  <Text style={[styles.cardEyebrow, isDarkMode && { color: '#94A3B8' }]}>
+                    PENDING / IN-PROGRESS
+                  </Text>
                   <View style={styles.valueRow}>
                     <Text style={styles.cardValueOrange}>{progressStats.pendingCount}</Text>
-                    <Text style={styles.cardValueSubText}> Subjects Remaining</Text>
+                    <Text style={[styles.cardValueSubText, isDarkMode && { color: '#CBD5E1' }]}>
+                      {' '}
+                      Subjects Remaining
+                    </Text>
                   </View>
                   <Text style={styles.cardSubOrange}>To Complete Degree</Text>
                 </View>
 
                 {/* Card 4: Cumulative GPA */}
-                <View style={[styles.summaryCard, styles.cardBorderViolet]}>
-                  <Text style={styles.cardEyebrow}>CUMULATIVE GPA</Text>
+                <View
+                  style={[
+                    styles.summaryCard,
+                    styles.cardBorderViolet,
+                    isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+                  ]}
+                >
+                  <Text style={[styles.cardEyebrow, isDarkMode && { color: '#94A3B8' }]}>
+                    CUMULATIVE GPA
+                  </Text>
                   <View style={styles.valueRow}>
                     <Text style={styles.cardValueViolet}>{progressStats.cumulativeGpa}</Text>
-                    <Text style={styles.cardValueTotal}> / 4.3</Text>
+                    <Text style={[styles.cardValueTotal, isDarkMode && { color: '#CBD5E1' }]}>
+                      {' '}
+                      / 4.3
+                    </Text>
                   </View>
                   <Text style={styles.cardSubViolet}>
                     {progressStats.totalCredits} Total Credits Earned
@@ -421,14 +469,26 @@ export default function StudentResultsScreen() {
               </View>
 
               {/* Card 5: Degree Completion Progress */}
-              <View style={styles.cardBox}>
+              <View
+                style={[
+                  styles.cardBox,
+                  isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+                ]}
+              >
                 <View style={styles.cardHeaderBetween}>
-                  <Text style={styles.boxTitle}>Degree Completion Progress</Text>
+                  <Text style={[styles.boxTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                    Degree Completion Progress
+                  </Text>
                   <Text style={styles.boxProgressPercentage}>
                     {progressStats.completionPercentage}% Complete
                   </Text>
                 </View>
-                <View style={styles.progressBarTrack}>
+                <View
+                  style={[
+                    styles.progressBarTrack,
+                    isDarkMode && { backgroundColor: '#334155' },
+                  ]}
+                >
                   <View
                     style={[
                       styles.progressBarFill,
@@ -440,8 +500,15 @@ export default function StudentResultsScreen() {
 
               {/* Semester Progression (Cyclic Status) if returned by Backend */}
               {cyclicStatus && Array.isArray(cyclicStatus.semesters) && cyclicStatus.semesters.length > 0 && (
-                <View style={styles.cardBox}>
-                  <Text style={styles.boxTitle}>Academic Semester Progression</Text>
+                <View
+                  style={[
+                    styles.cardBox,
+                    isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+                  ]}
+                >
+                  <Text style={[styles.boxTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                    Academic Semester Progression
+                  </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }}>
                     <View style={styles.cyclicTermsRow}>
                       {cyclicStatus.semesters.map((sem, idx) => {
@@ -452,8 +519,11 @@ export default function StudentResultsScreen() {
                             key={sem.semesterId || `sem_${idx}`}
                             style={[
                               styles.cyclicTermPill,
+                              isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
                               isCurrent && styles.cyclicTermPillCurrent,
+                              isCurrent && isDarkMode && { backgroundColor: '#1E1B4B', borderColor: '#6366F1' },
                               isDone && styles.cyclicTermPillDone,
+                              isDone && isDarkMode && { backgroundColor: '#064E3B', borderColor: '#10B981' },
                             ]}
                           >
                             <Ionicons
@@ -465,6 +535,7 @@ export default function StudentResultsScreen() {
                             <Text
                               style={[
                                 styles.cyclicTermText,
+                                isDarkMode && { color: '#CBD5E1' },
                                 isCurrent && styles.cyclicTermTextCurrent,
                                 isDone && styles.cyclicTermTextDone,
                               ]}
@@ -490,13 +561,29 @@ export default function StudentResultsScreen() {
               )}
 
               {/* Card 6: Course & Subject Completion Breakdown */}
-              <View style={styles.cardBox}>
-                <Text style={styles.boxTitle}>Course & Subject Completion Breakdown</Text>
+              <View
+                style={[
+                  styles.cardBox,
+                  isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+                ]}
+              >
+                <Text style={[styles.boxTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                  Course &amp; Subject Completion Breakdown
+                </Text>
                 {enrolledCourses.length === 0 ? (
-                  <View style={styles.emptyBox}>
+                  <View
+                    style={[
+                      styles.emptyBox,
+                      isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                    ]}
+                  >
                     <Ionicons name="book-outline" size={38} color="#94A3B8" />
-                    <Text style={styles.emptyTitle}>No enrolled subjects found</Text>
-                    <Text style={styles.emptySub}>Enroll in courses to start tracking your academic progress.</Text>
+                    <Text style={[styles.emptyTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                      No enrolled subjects found
+                    </Text>
+                    <Text style={[styles.emptySub, isDarkMode && { color: '#94A3B8' }]}>
+                      Enroll in courses to start tracking your academic progress.
+                    </Text>
                   </View>
                 ) : (
                   <View style={styles.subjectsList}>
@@ -508,19 +595,39 @@ export default function StudentResultsScreen() {
                       const progress = e.progressPercentage || (isCompleted ? 100 : 0);
 
                       return (
-                        <View key={e.id || `c_${idx}`} style={styles.subjectItemRow}>
+                        <View
+                          key={e.id || `c_${idx}`}
+                          style={[
+                            styles.subjectItemRow,
+                            isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                          ]}
+                        >
                           <View style={styles.subjectLeftBar} />
                           <View style={styles.subjectInfoCol}>
-                            <Text style={styles.subjectItemTitle} numberOfLines={2}>
+                            <Text
+                              style={[styles.subjectItemTitle, isDarkMode && { color: '#F8FAFC' }]}
+                              numberOfLines={2}
+                            >
                               {title}
                             </Text>
-                            <Text style={styles.subjectCohortText}>Cohort: {cohort}</Text>
+                            <Text style={[styles.subjectCohortText, isDarkMode && { color: '#94A3B8' }]}>
+                              Cohort: {cohort}
+                            </Text>
                             <View style={styles.subjectMetaRow}>
-                              <Text style={styles.subjectCreditsText}>{credits}.00 Credits</Text>
-                              <Text style={styles.subjectBullet}>•</Text>
-                              <Text style={styles.subjectProgressNumber}>{progress}% Progress</Text>
+                              <Text style={[styles.subjectCreditsText, isDarkMode && { color: '#94A3B8' }]}>
+                                {credits}.00 Credits
+                              </Text>
+                              <Text style={[styles.subjectBullet, isDarkMode && { color: '#64748B' }]}>•</Text>
+                              <Text style={[styles.subjectProgressNumber, isDarkMode && { color: '#CBD5E1' }]}>
+                                {progress}% Progress
+                              </Text>
                             </View>
-                            <View style={styles.miniProgressTrack}>
+                            <View
+                              style={[
+                                styles.miniProgressTrack,
+                                isDarkMode && { backgroundColor: '#334155' },
+                              ]}
+                            >
                               <View
                                 style={[
                                   styles.miniProgressFill,
@@ -559,13 +666,18 @@ export default function StudentResultsScreen() {
           {activeTab === 'transcripts' && (
             <View style={styles.tabContentBlock}>
               {/* Official Academic Details Banner */}
-              <View style={styles.transcriptBanner}>
+              <View
+                style={[
+                  styles.transcriptBanner,
+                  isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+                ]}
+              >
                 <View style={styles.transcriptBannerRow}>
-                  <View>
-                    <Text style={styles.transcriptStudentName}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={[styles.transcriptStudentName, isDarkMode && { color: '#F8FAFC' }]}>
                       {userProfile?.fullName || 'Enrolled Student'}
                     </Text>
-                    <Text style={styles.transcriptStudentId}>
+                    <Text style={[styles.transcriptStudentId, isDarkMode && { color: '#94A3B8' }]}>
                       Student ID: {userProfile?.id?.slice(0, 8).toUpperCase() || 'COT-2026'} • {progressStats.programTitle}
                     </Text>
                   </View>
@@ -578,16 +690,30 @@ export default function StudentResultsScreen() {
 
               {/* Grades Table / List */}
               {gradesData.grades.length === 0 ? (
-                <View style={styles.emptyBox}>
+                <View
+                  style={[
+                    styles.emptyBox,
+                    isDarkMode && { backgroundColor: '#161F30', borderColor: '#334155' },
+                  ]}
+                >
                   <Ionicons name="document-text-outline" size={44} color="#94A3B8" />
-                  <Text style={styles.emptyTitle}>No official grades yet</Text>
-                  <Text style={styles.emptySub}>
+                  <Text style={[styles.emptyTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                    No official grades yet
+                  </Text>
+                  <Text style={[styles.emptySub, isDarkMode && { color: '#94A3B8' }]}>
                     Your grades and credits will appear here once faculty evaluates coursework and publishes mid-term/final reports.
                   </Text>
                 </View>
               ) : (
-                <View style={styles.cardBox}>
-                  <Text style={styles.boxTitle}>Official Transcript Records</Text>
+                <View
+                  style={[
+                    styles.cardBox,
+                    isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+                  ]}
+                >
+                  <Text style={[styles.boxTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                    Official Transcript Records
+                  </Text>
                   <View style={styles.gradesList}>
                     {gradesData.grades.map((gr, idx) => {
                       const cTitle = gr.course?.title || gr.courseTitle || 'Subject';
@@ -595,11 +721,23 @@ export default function StudentResultsScreen() {
                       const points = getGradePoints(gr.grade);
 
                       return (
-                        <View key={gr.id || `gr_${idx}`} style={styles.gradeCard}>
+                        <View
+                          key={gr.id || `gr_${idx}`}
+                          style={[
+                            styles.gradeCard,
+                            isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                          ]}
+                        >
                           <View style={styles.gradeCardHeader}>
                             <View style={{ flex: 1, marginRight: 8 }}>
-                              <Text style={styles.gradeCourseTitle}>{cTitle}</Text>
-                              {gr.code ? <Text style={styles.gradeCourseCode}>{gr.code}</Text> : null}
+                              <Text style={[styles.gradeCourseTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                                {cTitle}
+                              </Text>
+                              {gr.code ? (
+                                <Text style={[styles.gradeCourseCode, isDarkMode && { color: '#94A3B8' }]}>
+                                  {gr.code}
+                                </Text>
+                              ) : null}
                             </View>
                             <View style={styles.gradePillBox}>
                               <Text style={styles.gradePillText}>{gr.grade || '—'}</Text>
@@ -607,38 +745,79 @@ export default function StudentResultsScreen() {
                           </View>
 
                           <View style={styles.gradeScoresGrid}>
-                            <View style={styles.scoreBlock}>
-                              <Text style={styles.scoreBlockLabel}>Assessment (/65)</Text>
-                              <Text style={[styles.scoreBlockValue, { color: '#4F46E5' }]}>
+                            <View
+                              style={[
+                                styles.scoreBlock,
+                                isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' },
+                              ]}
+                            >
+                              <Text style={[styles.scoreBlockLabel, isDarkMode && { color: '#94A3B8' }]}>
+                                Assessment (/65)
+                              </Text>
+                              <Text style={[styles.scoreBlockValue, { color: isDarkMode ? '#818CF8' : '#4F46E5' }]}>
                                 {gr.assignmentScore ?? '—'}
                               </Text>
                             </View>
-                            <View style={styles.scoreBlock}>
-                              <Text style={styles.scoreBlockLabel}>Attendance (/5)</Text>
-                              <Text style={[styles.scoreBlockValue, { color: '#059669' }]}>
+                            <View
+                              style={[
+                                styles.scoreBlock,
+                                isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' },
+                              ]}
+                            >
+                              <Text style={[styles.scoreBlockLabel, isDarkMode && { color: '#94A3B8' }]}>
+                                Attendance (/5)
+                              </Text>
+                              <Text style={[styles.scoreBlockValue, { color: '#10B981' }]}>
                                 {gr.attendanceScore ?? '—'}
                               </Text>
                             </View>
-                            <View style={styles.scoreBlock}>
-                              <Text style={styles.scoreBlockLabel}>Final Exam (/30)</Text>
-                              <Text style={[styles.scoreBlockValue, { color: '#7C3AED' }]}>
+                            <View
+                              style={[
+                                styles.scoreBlock,
+                                isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' },
+                              ]}
+                            >
+                              <Text style={[styles.scoreBlockLabel, isDarkMode && { color: '#94A3B8' }]}>
+                                Final Exam (/30)
+                              </Text>
+                              <Text style={[styles.scoreBlockValue, { color: isDarkMode ? '#A78BFA' : '#7C3AED' }]}>
                                 {gr.finalExamScore ?? '—'}
                               </Text>
                             </View>
-                            <View style={styles.scoreBlock}>
-                              <Text style={styles.scoreBlockLabel}>Total (/100)</Text>
-                              <Text style={[styles.scoreBlockValue, { color: '#0F172A', fontWeight: '800' }]}>
+                            <View
+                              style={[
+                                styles.scoreBlock,
+                                isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' },
+                              ]}
+                            >
+                              <Text style={[styles.scoreBlockLabel, isDarkMode && { color: '#94A3B8' }]}>
+                                Total (/100)
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.scoreBlockValue,
+                                  { color: isDarkMode ? '#F8FAFC' : '#0F172A', fontWeight: '800' },
+                                ]}
+                              >
                                 {gr.totalScore ?? '0'}
                               </Text>
                             </View>
                           </View>
 
-                          <View style={styles.gradeCardFooter}>
-                            <Text style={styles.gradeFooterMeta}>
+                          <View
+                            style={[
+                              styles.gradeCardFooter,
+                              isDarkMode && { borderTopColor: '#334155' },
+                            ]}
+                          >
+                            <Text style={[styles.gradeFooterMeta, isDarkMode && { color: '#CBD5E1' }]}>
                               Credits: <Text style={{ fontWeight: '700' }}>{cCredits.toFixed(0)}</Text>
                             </Text>
-                            <Text style={styles.gradeFooterMeta}>
-                              Grade Points: <Text style={{ fontWeight: '700', color: '#4F46E5' }}>{points.toFixed(1)}</Text>
+                            <Text style={[styles.gradeFooterMeta, isDarkMode && { color: '#CBD5E1' }]}>
+                              Grade Points:{' '}
+                              <Text style={{ fontWeight: '700', color: isDarkMode ? '#818CF8' : '#4F46E5' }}>
+                                {points.toFixed(1)}
+                              </Text>
                             </Text>
                           </View>
                         </View>
@@ -647,20 +826,35 @@ export default function StudentResultsScreen() {
                   </View>
 
                   {/* Summary / Total Row matching Website */}
-                  <View style={styles.transcriptSummaryBox}>
+                  <View
+                    style={[
+                      styles.transcriptSummaryBox,
+                      isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                    ]}
+                  >
                     <View style={styles.summaryRowBetween}>
-                      <Text style={styles.summaryTotalLabel}>Total Credits Earned</Text>
-                      <Text style={styles.summaryTotalValue}>{progressStats.totalCredits} Credits</Text>
+                      <Text style={[styles.summaryTotalLabel, isDarkMode && { color: '#94A3B8' }]}>
+                        Total Credits Earned
+                      </Text>
+                      <Text style={[styles.summaryTotalValue, isDarkMode && { color: '#F8FAFC' }]}>
+                        {progressStats.totalCredits} Credits
+                      </Text>
                     </View>
                     <View style={styles.summaryRowBetween}>
-                      <Text style={styles.summaryTotalLabel}>Cumulative GPA</Text>
-                      <Text style={[styles.summaryTotalValue, { color: '#7C3AED' }]}>
+                      <Text style={[styles.summaryTotalLabel, isDarkMode && { color: '#94A3B8' }]}>
+                        Cumulative GPA
+                      </Text>
+                      <Text style={[styles.summaryTotalValue, { color: isDarkMode ? '#A78BFA' : '#7C3AED' }]}>
                         {progressStats.cumulativeGpa} / 4.3
                       </Text>
                     </View>
                     <View style={styles.summaryRowBetween}>
-                      <Text style={styles.summaryTotalLabel}>Grading Scale Standard</Text>
-                      <Text style={styles.summaryScaleValue}>4.3 ATA Grade Point Scale</Text>
+                      <Text style={[styles.summaryTotalLabel, isDarkMode && { color: '#94A3B8' }]}>
+                        Grading Scale Standard
+                      </Text>
+                      <Text style={[styles.summaryScaleValue, isDarkMode && { color: '#CBD5E1' }]}>
+                        4.3 ATA Grade Point Scale
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -672,16 +866,30 @@ export default function StudentResultsScreen() {
           {activeTab === 'final' && (
             <View style={styles.tabContentBlock}>
               {finalResults.length === 0 ? (
-                <View style={styles.emptyBox}>
+                <View
+                  style={[
+                    styles.emptyBox,
+                    isDarkMode && { backgroundColor: '#161F30', borderColor: '#334155' },
+                  ]}
+                >
                   <Ionicons name="trophy-outline" size={44} color="#94A3B8" />
-                  <Text style={styles.emptyTitle}>No final results yet</Text>
-                  <Text style={styles.emptySub}>
+                  <Text style={[styles.emptyTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                    No final results yet
+                  </Text>
+                  <Text style={[styles.emptySub, isDarkMode && { color: '#94A3B8' }]}>
                     Your comprehensive examination results and published marks will appear here once declared.
                   </Text>
                 </View>
               ) : (
-                <View style={styles.cardBox}>
-                  <Text style={styles.boxTitle}>Published Examination Results</Text>
+                <View
+                  style={[
+                    styles.cardBox,
+                    isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+                  ]}
+                >
+                  <Text style={[styles.boxTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                    Published Examination Results
+                  </Text>
                   <View style={styles.examResultsList}>
                     {finalResults.map((item, idx) => {
                       const eTitle =
@@ -695,11 +903,21 @@ export default function StudentResultsScreen() {
                       const isPassed = Boolean(item.isPassed);
 
                       return (
-                        <View key={item.id || `fr_${idx}`} style={styles.examResultCard}>
+                        <View
+                          key={item.id || `fr_${idx}`}
+                          style={[
+                            styles.examResultCard,
+                            isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                          ]}
+                        >
                           <View style={styles.examResultHeader}>
                             <View style={{ flex: 1, marginRight: 8 }}>
-                              <Text style={styles.examResultTitle}>{eTitle}</Text>
-                              <Text style={styles.examResultCourse}>{cTitle}</Text>
+                              <Text style={[styles.examResultTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                                {eTitle}
+                              </Text>
+                              <Text style={[styles.examResultCourse, isDarkMode && { color: '#94A3B8' }]}>
+                                {cTitle}
+                              </Text>
                             </View>
                             <View style={[styles.passFailBadge, isPassed ? styles.badgeGreen : styles.badgeRed]}>
                               <Ionicons
@@ -716,20 +934,28 @@ export default function StudentResultsScreen() {
 
                           <View style={styles.examScoreRow}>
                             <View style={styles.scoreItem}>
-                              <Text style={styles.scoreItemLabel}>Score</Text>
-                              <Text style={styles.scoreItemValue}>
+                              <Text style={[styles.scoreItemLabel, isDarkMode && { color: '#94A3B8' }]}>
+                                Score
+                              </Text>
+                              <Text style={[styles.scoreItemValue, isDarkMode && { color: '#F8FAFC' }]}>
                                 {item.marksObtained ?? 0} / {item.totalMarks ?? '100'}
                               </Text>
                             </View>
                             {item.grade ? (
                               <View style={styles.scoreItem}>
-                                <Text style={styles.scoreItemLabel}>Grade</Text>
-                                <Text style={[styles.scoreItemValue, { color: '#4F46E5' }]}>{item.grade}</Text>
+                                <Text style={[styles.scoreItemLabel, isDarkMode && { color: '#94A3B8' }]}>
+                                  Grade
+                                </Text>
+                                <Text style={[styles.scoreItemValue, { color: isDarkMode ? '#818CF8' : '#4F46E5' }]}>
+                                  {item.grade}
+                                </Text>
                               </View>
                             ) : null}
                             <View style={styles.scoreItem}>
-                              <Text style={styles.scoreItemLabel}>Date</Text>
-                              <Text style={styles.scoreItemValue}>
+                              <Text style={[styles.scoreItemLabel, isDarkMode && { color: '#94A3B8' }]}>
+                                Date
+                              </Text>
+                              <Text style={[styles.scoreItemValue, isDarkMode && { color: '#F8FAFC' }]}>
                                 {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Recent'}
                               </Text>
                             </View>
@@ -747,16 +973,30 @@ export default function StudentResultsScreen() {
           {activeTab === 'attempts' && (
             <View style={styles.tabContentBlock}>
               {attemptsList.length === 0 ? (
-                <View style={styles.emptyBox}>
+                <View
+                  style={[
+                    styles.emptyBox,
+                    isDarkMode && { backgroundColor: '#161F30', borderColor: '#334155' },
+                  ]}
+                >
                   <Ionicons name="time-outline" size={44} color="#94A3B8" />
-                  <Text style={styles.emptyTitle}>No exam attempts yet</Text>
-                  <Text style={styles.emptySub}>
+                  <Text style={[styles.emptyTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                    No exam attempts yet
+                  </Text>
+                  <Text style={[styles.emptySub, isDarkMode && { color: '#94A3B8' }]}>
                     Your online test submissions, timer logs, and answer reviews will appear here.
                   </Text>
                 </View>
               ) : (
-                <View style={styles.cardBox}>
-                  <Text style={styles.boxTitle}>Exam & Quiz Submission History</Text>
+                <View
+                  style={[
+                    styles.cardBox,
+                    isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+                  ]}
+                >
+                  <Text style={[styles.boxTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                    Exam &amp; Quiz Submission History
+                  </Text>
                   <View style={styles.attemptsList}>
                     {attemptsList.map((att, idx) => {
                       const eTitle =
@@ -769,11 +1009,21 @@ export default function StudentResultsScreen() {
                       const status = (att.status || 'SUBMITTED').toUpperCase();
 
                       return (
-                        <View key={att.id || `att_${idx}`} style={styles.attemptCard}>
+                        <View
+                          key={att.id || `att_${idx}`}
+                          style={[
+                            styles.attemptCard,
+                            isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                          ]}
+                        >
                           <View style={styles.attemptCardHeader}>
                             <View style={{ flex: 1, marginRight: 8 }}>
-                              <Text style={styles.attemptTitle}>{eTitle}</Text>
-                              <Text style={styles.attemptCourse}>{cTitle}</Text>
+                              <Text style={[styles.attemptTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                                {eTitle}
+                              </Text>
+                              <Text style={[styles.attemptCourse, isDarkMode && { color: '#94A3B8' }]}>
+                                {cTitle}
+                              </Text>
                             </View>
                             <View style={styles.attemptNumberBadge}>
                               <Text style={styles.attemptNumberText}>Attempt #{attNum}</Text>
@@ -782,14 +1032,18 @@ export default function StudentResultsScreen() {
 
                           <View style={styles.attemptDetailsRow}>
                             <View style={styles.attemptScoreCol}>
-                              <Text style={styles.attemptScoreLabel}>Score</Text>
-                              <Text style={styles.attemptScoreValue}>
+                              <Text style={[styles.attemptScoreLabel, isDarkMode && { color: '#94A3B8' }]}>
+                                Score
+                              </Text>
+                              <Text style={[styles.attemptScoreValue, isDarkMode && { color: '#F8FAFC' }]}>
                                 {att.marksObtained ?? 0} / {att.totalMarks ?? '—'}
                               </Text>
                             </View>
 
                             <View style={styles.attemptStatusCol}>
-                              <Text style={styles.attemptScoreLabel}>Status</Text>
+                              <Text style={[styles.attemptScoreLabel, isDarkMode && { color: '#94A3B8' }]}>
+                                Status
+                              </Text>
                               <View
                                 style={[
                                   styles.statusPillSmall,
@@ -816,12 +1070,26 @@ export default function StudentResultsScreen() {
                             </View>
 
                             <TouchableOpacity
-                              style={styles.reviewButton}
+                              style={[
+                                styles.reviewButton,
+                                isDarkMode && { backgroundColor: '#1E1B4B', borderColor: '#4F46E5' },
+                              ]}
                               onPress={() => handleOpenReview(att)}
                               activeOpacity={0.8}
                             >
-                              <Text style={styles.reviewButtonText}>Review</Text>
-                              <Ionicons name="arrow-forward" size={12} color="#4F46E5" />
+                              <Text
+                                style={[
+                                  styles.reviewButtonText,
+                                  isDarkMode && { color: '#818CF8' },
+                                ]}
+                              >
+                                Review
+                              </Text>
+                              <Ionicons
+                                name="arrow-forward"
+                                size={12}
+                                color={isDarkMode ? '#818CF8' : '#4F46E5'}
+                              />
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -837,16 +1105,30 @@ export default function StudentResultsScreen() {
           {activeTab === 'video' && (
             <View style={styles.tabContentBlock}>
               {videoQuizzes.length === 0 ? (
-                <View style={styles.emptyBox}>
+                <View
+                  style={[
+                    styles.emptyBox,
+                    isDarkMode && { backgroundColor: '#161F30', borderColor: '#334155' },
+                  ]}
+                >
                   <Ionicons name="videocam-outline" size={44} color="#94A3B8" />
-                  <Text style={styles.emptyTitle}>No video quizzes answered</Text>
-                  <Text style={styles.emptySub}>
+                  <Text style={[styles.emptyTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                    No video quizzes answered
+                  </Text>
+                  <Text style={[styles.emptySub, isDarkMode && { color: '#94A3B8' }]}>
                     Interactive checkpoint questions answered during video lecture streams will appear here with instant score analytics.
                   </Text>
                 </View>
               ) : (
-                <View style={styles.cardBox}>
-                  <Text style={styles.boxTitle}>Interactive Video Checkpoints</Text>
+                <View
+                  style={[
+                    styles.cardBox,
+                    isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+                  ]}
+                >
+                  <Text style={[styles.boxTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                    Interactive Video Checkpoints
+                  </Text>
                   <View style={styles.videoQuizList}>
                     {videoQuizzes.map((vq, idx) => {
                       const cTitle =
@@ -859,11 +1141,21 @@ export default function StudentResultsScreen() {
                       const isCorrect = Boolean(vq.isCorrect);
 
                       return (
-                        <View key={vq.id || `vq_${idx}`} style={styles.videoQuizCard}>
+                        <View
+                          key={vq.id || `vq_${idx}`}
+                          style={[
+                            styles.videoQuizCard,
+                            isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                          ]}
+                        >
                           <View style={styles.videoQuizHeader}>
                             <View style={{ flex: 1, marginRight: 8 }}>
-                              <Text style={styles.videoQuizCourse}>{cTitle}</Text>
-                              <Text style={styles.videoQuizLesson}>{lTitle}</Text>
+                              <Text style={[styles.videoQuizCourse, isDarkMode && { color: '#94A3B8' }]}>
+                                {cTitle}
+                              </Text>
+                              <Text style={[styles.videoQuizLesson, isDarkMode && { color: '#F8FAFC' }]}>
+                                {lTitle}
+                              </Text>
                             </View>
                             <View style={[styles.passFailBadge, isCorrect ? styles.badgeGreen : styles.badgeRed]}>
                               <Ionicons
@@ -878,13 +1170,18 @@ export default function StudentResultsScreen() {
                             </View>
                           </View>
 
-                          <Text style={styles.videoQuizQuestionText}>&ldquo;{qText}&rdquo;</Text>
+                          <Text style={[styles.videoQuizQuestionText, isDarkMode && { color: '#E2E8F0' }]}>
+                            &ldquo;{qText}&rdquo;
+                          </Text>
 
                           <View style={styles.videoQuizFooter}>
-                            <Text style={styles.videoQuizScoreText}>
-                              Score: <Text style={{ fontWeight: '700' }}>{vq.marks ?? (isCorrect ? 1 : 0)} / {maxMarks}</Text>
+                            <Text style={[styles.videoQuizScoreText, isDarkMode && { color: '#CBD5E1' }]}>
+                              Score:{' '}
+                              <Text style={{ fontWeight: '700' }}>
+                                {vq.marks ?? (isCorrect ? 1 : 0)} / {maxMarks}
+                              </Text>
                             </Text>
-                            <Text style={styles.videoQuizDateText}>
+                            <Text style={[styles.videoQuizDateText, isDarkMode && { color: '#94A3B8' }]}>
                               {vq.createdAt ? new Date(vq.createdAt).toLocaleDateString() : 'Recorded'}
                             </Text>
                           </View>
@@ -907,43 +1204,67 @@ export default function StudentResultsScreen() {
         onRequestClose={() => setIsReviewModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
+          <View
+            style={[
+              styles.modalContent,
+              isDarkMode && { backgroundColor: '#111827', borderColor: '#1F2937' },
+            ]}
+          >
+            <View style={[styles.modalHeader, isDarkMode && { borderBottomColor: '#1F2937' }]}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>Attempt Answers & Review</Text>
-                <Text style={styles.modalSub}>
+                <Text style={[styles.modalTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                  Attempt Answers &amp; Review
+                </Text>
+                <Text style={[styles.modalSub, isDarkMode && { color: '#94A3B8' }]}>
                   {typeof selectedAttempt?.examId === 'object'
                     ? selectedAttempt?.examId?.title
                     : 'Examination Attempt'}
                 </Text>
               </View>
               <TouchableOpacity
-                style={styles.modalCloseBtn}
+                style={[styles.modalCloseBtn, isDarkMode && { backgroundColor: '#1E293B' }]}
                 onPress={() => setIsReviewModalVisible(false)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons name="close" size={20} color="#0F172A" />
+                <Ionicons name="close" size={20} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
               </TouchableOpacity>
             </View>
 
             {isLoadingReview ? (
               <View style={styles.modalCenterBox}>
                 <ActivityIndicator size="large" color="#4F46E5" />
-                <Text style={styles.loadingText}>Fetching submitted answers & explanations...</Text>
+                <Text style={[styles.loadingText, isDarkMode && { color: '#94A3B8' }]}>
+                  Fetching submitted answers &amp; explanations...
+                </Text>
               </View>
             ) : reviewData && reviewData.questions && reviewData.questions.length > 0 ? (
               <ScrollView style={styles.modalScroll}>
-                <View style={styles.modalScoreCard}>
-                  <Text style={styles.modalScoreTitle}>Final Exam Score</Text>
-                  <Text style={styles.modalScoreBig}>
+                <View
+                  style={[
+                    styles.modalScoreCard,
+                    isDarkMode && { backgroundColor: '#1E1B4B', borderColor: '#312E81' },
+                  ]}
+                >
+                  <Text style={[styles.modalScoreTitle, isDarkMode && { color: '#C7D2FE' }]}>
+                    Final Exam Score
+                  </Text>
+                  <Text style={[styles.modalScoreBig, isDarkMode && { color: '#F8FAFC' }]}>
                     {reviewData.score} / {reviewData.totalMarks} ({reviewData.percentage}%)
                   </Text>
                 </View>
 
                 {reviewData.questions.map((q, qIdx) => (
-                  <View key={q.questionId || `rq_${qIdx}`} style={styles.reviewQuestionCard}>
+                  <View
+                    key={q.questionId || `rq_${qIdx}`}
+                    style={[
+                      styles.reviewQuestionCard,
+                      isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+                    ]}
+                  >
                     <Text style={styles.reviewQuestionHeader}>Question {qIdx + 1}</Text>
-                    <Text style={styles.reviewQuestionText}>{q.questionText}</Text>
+                    <Text style={[styles.reviewQuestionText, isDarkMode && { color: '#F8FAFC' }]}>
+                      {q.questionText}
+                    </Text>
 
                     {q.options && q.options.length > 0 ? (
                       <View style={styles.optionsList}>
@@ -956,6 +1277,12 @@ export default function StudentResultsScreen() {
                               key={`opt_${optIdx}`}
                               style={[
                                 styles.optionRow,
+                                isDarkMode &&
+                                  !isCorrect &&
+                                  !(isSelected && !isCorrect) && {
+                                    backgroundColor: '#1E293B',
+                                    borderColor: '#334155',
+                                  },
                                 isCorrect && styles.optionRowCorrect,
                                 isSelected && !isCorrect && styles.optionRowWrong,
                               ]}
@@ -963,6 +1290,9 @@ export default function StudentResultsScreen() {
                               <Text
                                 style={[
                                   styles.optionText,
+                                  isDarkMode &&
+                                    !isCorrect &&
+                                    !(isSelected && !isCorrect) && { color: '#CBD5E1' },
                                   isCorrect && styles.optionTextCorrect,
                                   isSelected && !isCorrect && styles.optionTextWrong,
                                 ]}
@@ -980,16 +1310,34 @@ export default function StudentResultsScreen() {
                         })}
                       </View>
                     ) : q.textAnswer ? (
-                      <View style={styles.essayAnswerBox}>
-                        <Text style={styles.essayLabel}>Submitted Essay Answer:</Text>
-                        <Text style={styles.essayText}>{q.textAnswer}</Text>
+                      <View
+                        style={[
+                          styles.essayAnswerBox,
+                          isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                        ]}
+                      >
+                        <Text style={[styles.essayLabel, isDarkMode && { color: '#94A3B8' }]}>
+                          Submitted Essay Answer:
+                        </Text>
+                        <Text style={[styles.essayText, isDarkMode && { color: '#F8FAFC' }]}>
+                          {q.textAnswer}
+                        </Text>
                       </View>
                     ) : null}
 
                     {q.explanation ? (
-                      <View style={styles.explanationBox}>
-                        <Text style={styles.explanationLabel}>Faculty Feedback / Explanation:</Text>
-                        <Text style={styles.explanationText}>{q.explanation}</Text>
+                      <View
+                        style={[
+                          styles.explanationBox,
+                          isDarkMode && { backgroundColor: '#1E1B4B', borderColor: '#312E81' },
+                        ]}
+                      >
+                        <Text style={[styles.explanationLabel, isDarkMode && { color: '#A5B4FC' }]}>
+                          Faculty Feedback / Explanation:
+                        </Text>
+                        <Text style={[styles.explanationText, isDarkMode && { color: '#E2E8F0' }]}>
+                          {q.explanation}
+                        </Text>
                       </View>
                     ) : null}
                   </View>
@@ -998,8 +1346,10 @@ export default function StudentResultsScreen() {
             ) : (
               <View style={styles.modalCenterBox}>
                 <Ionicons name="document-text-outline" size={42} color="#94A3B8" />
-                <Text style={styles.emptyTitle}>Detailed review not available</Text>
-                <Text style={styles.emptySub}>
+                <Text style={[styles.emptyTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                  Detailed review not available
+                </Text>
+                <Text style={[styles.emptySub, isDarkMode && { color: '#94A3B8' }]}>
                   Detailed question review is published once all students complete the evaluation window.
                 </Text>
               </View>
@@ -1152,19 +1502,19 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: '47%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     ...Platform.select({
       ios: {
         shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 1 },
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
-        shadowRadius: 3,
+        shadowRadius: 6,
       },
       android: {
-        elevation: 1,
+        elevation: 2,
       },
     }),
   },

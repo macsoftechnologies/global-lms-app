@@ -1,20 +1,26 @@
 {
   "expo": {
-    "name": "New Project",
-    "slug": "new-project",
-    "scheme": "new-project",
+    "name": "Cotr Global Online",
+    "slug": "globallms",
+    "scheme": "globallms",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.newproject"
+      "bundleIdentifier": "com.cotr.globallms"
     },
     "android": {
-      "package": "com.anonymous.newproject",
+      "package": "com.cotr.globallms",
+      "versionCode": 1,
+      "permissions": [
+        "INTERNET",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0F172A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -32,8 +38,17 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "db6f6053-cda0-4414-8171-ff9b98762c9c"
+      }
+    },
+    "owner": "macsof"
   }
 }
-
-

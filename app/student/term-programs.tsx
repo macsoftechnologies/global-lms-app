@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { DashboardService } from '../../src/services/dashboardService';
 import { ProgramOption, PublishedCourse } from '../../src/types';
 import { ENV } from '../../src/config/env';
+import { useTheme } from '../../src/context/ThemeContext';
 import {
   resolveProgramImageUrl,
   formatBatchSchedule,
@@ -56,6 +57,7 @@ interface TermProgramsProps {
 }
 
 export default function TermProgramsScreen({ initialMode = 'courses' }: TermProgramsProps = {}) {
+  const { isDarkMode } = useTheme();
   const params = useLocalSearchParams<{
     termNumber?: string;
     termName?: string;
@@ -217,7 +219,7 @@ export default function TermProgramsScreen({ initialMode = 'courses' }: TermProg
     const progress = course.progressPercentage || 0;
 
     return (
-      <View style={styles.courseCard}>
+      <View style={[styles.courseCard, isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' }]}>
         {/* Course Thumbnail Banner */}
         <View style={styles.courseImageContainer}>
           <Image
@@ -258,10 +260,10 @@ export default function TermProgramsScreen({ initialMode = 'courses' }: TermProg
           </View>
 
           {/* Course Title */}
-          <Text style={styles.courseTitle}>{course.title}</Text>
+          <Text style={[styles.courseTitle, isDarkMode && { color: '#F8FAFC' }]}>{course.title}</Text>
 
           {/* Course Description */}
-          <Text style={styles.courseDescription} numberOfLines={3}>
+          <Text style={[styles.courseDescription, isDarkMode && { color: '#94A3B8' }]} numberOfLines={3}>
             {course.description ||
               'Comprehensive theological study covering biblical exegesis, hermeneutics, doctrinal context, and pastoral ministry application.'}
           </Text>
@@ -338,7 +340,7 @@ export default function TermProgramsScreen({ initialMode = 'courses' }: TermProg
     const totalSubjects = program.totalSubjects || 20;
 
     return (
-      <View style={styles.programCard}>
+      <View style={[styles.programCard, isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' }]}>
         <View style={styles.imageBannerContainer}>
           <Image source={{ uri: imageUrl }} style={styles.programBannerImage} resizeMode="cover" />
           <View style={styles.termInfoPill}>
@@ -357,30 +359,30 @@ export default function TermProgramsScreen({ initialMode = 'courses' }: TermProg
             </View>
           </View>
 
-          <Text style={styles.programTitle}>{program.name}</Text>
+          <Text style={[styles.programTitle, isDarkMode && { color: '#F8FAFC' }]}>{program.name}</Text>
 
           <View style={styles.detailsGrid}>
-            <View style={styles.detailBox}>
+            <View style={[styles.detailBox, isDarkMode && { backgroundColor: '#1E293B' }]}>
               <Ionicons name="calendar" size={15} color="#6366F1" />
               <View style={styles.detailTextBox}>
-                <Text style={styles.detailLabel}>Terms</Text>
-                <Text style={styles.detailValue}>{totalSemesters} Semesters</Text>
+                <Text style={[styles.detailLabel, isDarkMode && { color: '#94A3B8' }]}>Terms</Text>
+                <Text style={[styles.detailValue, isDarkMode && { color: '#F8FAFC' }]}>{totalSemesters} Semesters</Text>
               </View>
             </View>
-            <View style={styles.detailBox}>
+            <View style={[styles.detailBox, isDarkMode && { backgroundColor: '#1E293B' }]}>
               <Ionicons name="book" size={15} color="#0284C7" />
               <View style={styles.detailTextBox}>
-                <Text style={styles.detailLabel}>Subjects</Text>
-                <Text style={styles.detailValue}>{totalSubjects} Courses</Text>
+                <Text style={[styles.detailLabel, isDarkMode && { color: '#94A3B8' }]}>Subjects</Text>
+                <Text style={[styles.detailValue, isDarkMode && { color: '#F8FAFC' }]}>{totalSubjects} Courses</Text>
               </View>
             </View>
           </View>
 
-          <Text style={styles.programDescription}>{description}</Text>
+          <Text style={[styles.programDescription, isDarkMode && { color: '#94A3B8' }]}>{description}</Text>
 
-          <View style={styles.scheduleBadge}>
-            <Ionicons name="calendar-outline" size={14} color="#475569" style={{ marginRight: 6 }} />
-            <Text style={styles.scheduleBadgeText} numberOfLines={1}>
+          <View style={[styles.scheduleBadge, isDarkMode && { backgroundColor: '#1E293B' }]}>
+            <Ionicons name="calendar-outline" size={14} color={isDarkMode ? '#94A3B8' : '#475569'} style={{ marginRight: 6 }} />
+            <Text style={[styles.scheduleBadgeText, isDarkMode && { color: '#94A3B8' }]} numberOfLines={1}>
               Schedule: {schedule}
             </Text>
           </View>
@@ -406,36 +408,36 @@ export default function TermProgramsScreen({ initialMode = 'courses' }: TermProg
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: '#0B0F19' }]} edges={['top', 'bottom']}>
       {/* Top Header Bar */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, isDarkMode && { backgroundColor: '#111827', borderBottomColor: '#1F2937' }]}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, isDarkMode && { backgroundColor: '#1E293B' }]}
           onPress={() => router.back()}
           activeOpacity={0.7}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="arrow-back" size={22} color="#0F172A" />
+          <Ionicons name="arrow-back" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
         </TouchableOpacity>
 
         <View style={styles.topBarTitleContainer}>
-          <Text style={styles.topBarTitle}>Term {selectedTerm} Curriculum</Text>
-          <Text style={styles.topBarSubtitle}>
+          <Text style={[styles.topBarTitle, isDarkMode && { color: '#F8FAFC' }]}>Term {selectedTerm} Curriculum</Text>
+          <Text style={[styles.topBarSubtitle, isDarkMode && { color: '#94A3B8' }]}>
             COTR Global Online • Academic Seminary
           </Text>
         </View>
 
         <TouchableOpacity
-          style={styles.headerActionBtn}
+          style={[styles.headerActionBtn, isDarkMode && { backgroundColor: '#1E293B' }]}
           onPress={() => router.push('/student/programs' as any)}
           activeOpacity={0.7}
         >
-          <Ionicons name="grid-outline" size={20} color="#6366F1" />
+          <Ionicons name="grid-outline" size={20} color={isDarkMode ? '#818CF8' : '#6366F1'} />
         </TouchableOpacity>
       </View>
 
       {/* Horizontal Term Selector Bar */}
-      <View style={styles.termSelectorWrapper}>
+      <View style={[styles.termSelectorWrapper, isDarkMode && { backgroundColor: '#111827', borderBottomColor: '#1F2937' }]}>
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -446,14 +448,18 @@ export default function TermProgramsScreen({ initialMode = 'courses' }: TermProg
             const isSelected = selectedTerm === termNum;
             return (
               <TouchableOpacity
-                style={[styles.termTabPill, isSelected && styles.termTabPillActive]}
+                style={[
+                  styles.termTabPill,
+                  isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                  isSelected && styles.termTabPillActive,
+                ]}
                 onPress={() => setSelectedTerm(termNum)}
                 activeOpacity={0.8}
               >
                 <Ionicons
                   name="calendar"
                   size={13}
-                  color={isSelected ? '#FFFFFF' : '#64748B'}
+                  color={isSelected ? '#FFFFFF' : isDarkMode ? '#94A3B8' : '#64748B'}
                   style={{ marginRight: 5 }}
                 />
                 <Text style={[styles.termTabText, isSelected && styles.termTabTextActive]}>
@@ -466,8 +472,8 @@ export default function TermProgramsScreen({ initialMode = 'courses' }: TermProg
       </View>
 
       {/* View Switcher: Courses vs Programs */}
-      <View style={styles.toggleRowContainer}>
-        <View style={styles.toggleSegment}>
+      <View style={[styles.toggleRowContainer, isDarkMode && { backgroundColor: '#0B0F19', borderBottomColor: '#1F2937' }]}>
+        <View style={[styles.toggleSegment, isDarkMode && { backgroundColor: '#1E293B' }]}>
           <TouchableOpacity
             style={[styles.toggleBtn, activeTab === 'courses' && styles.toggleBtnActive]}
             onPress={() => setActiveTab('courses')}
@@ -476,7 +482,7 @@ export default function TermProgramsScreen({ initialMode = 'courses' }: TermProg
             <Ionicons
               name="book"
               size={15}
-              color={activeTab === 'courses' ? '#6366F1' : '#64748B'}
+              color={activeTab === 'courses' ? '#6366F1' : isDarkMode ? '#94A3B8' : '#64748B'}
               style={{ marginRight: 6 }}
             />
             <Text style={[styles.toggleBtnText, activeTab === 'courses' && styles.toggleBtnTextActive]}>
@@ -492,7 +498,7 @@ export default function TermProgramsScreen({ initialMode = 'courses' }: TermProg
             <Ionicons
               name="school"
               size={15}
-              color={activeTab === 'programs' ? '#6366F1' : '#64748B'}
+              color={activeTab === 'programs' ? '#6366F1' : isDarkMode ? '#94A3B8' : '#64748B'}
               style={{ marginRight: 6 }}
             />
             <Text style={[styles.toggleBtnText, activeTab === 'programs' && styles.toggleBtnTextActive]}>

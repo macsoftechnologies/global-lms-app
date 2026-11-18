@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { ChatConversation, ChatMessage, ChatRole } from '../../types/chat';
 import { MessageInput } from './MessageInput';
+import { useTheme } from '../../context/ThemeContext';
 
 interface MessageWindowProps {
   conversation: ChatConversation;
@@ -34,6 +35,22 @@ export const MessageWindow: React.FC<MessageWindowProps> = ({
   onModerateMessage,
   isTyping = false,
 }) => {
+  const { isDarkMode } = useTheme();
+  const styles = React.useMemo(() => {
+    if (!isDarkMode) return baseStyles;
+    return {
+      ...baseStyles,
+      container: StyleSheet.flatten([baseStyles.container, { backgroundColor: '#0B0F19' }]) as typeof baseStyles.container,
+      header: StyleSheet.flatten([baseStyles.header, { backgroundColor: '#111827', borderBottomColor: '#1F2937' }]) as typeof baseStyles.header,
+      backButton: StyleSheet.flatten([baseStyles.backButton, { backgroundColor: '#1E293B' }]) as typeof baseStyles.backButton,
+      headerTitle: StyleSheet.flatten([baseStyles.headerTitle, { color: '#F8FAFC' }]) as typeof baseStyles.headerTitle,
+      bubbleOther: StyleSheet.flatten([baseStyles.bubbleOther, { backgroundColor: '#1E293B', borderColor: '#334155' }]) as typeof baseStyles.bubbleOther,
+      senderName: StyleSheet.flatten([baseStyles.senderName, { color: '#E2E8F0' }]) as typeof baseStyles.senderName,
+      messageTextOther: StyleSheet.flatten([baseStyles.messageTextOther, { color: '#F8FAFC' }]) as typeof baseStyles.messageTextOther,
+      emptyText: StyleSheet.flatten([baseStyles.emptyText, { color: '#94A3B8' }]) as typeof baseStyles.emptyText,
+    };
+  }, [isDarkMode]);
+
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
 
   // Auto-scroll to latest message on change
@@ -276,7 +293,7 @@ export const MessageWindow: React.FC<MessageWindowProps> = ({
           onPress={onBack}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="arrow-back" size={20} color="#0F172A" />
+          <Ionicons name="arrow-back" size={20} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
         </TouchableOpacity>
 
         <View style={styles.headerInfo}>
@@ -341,7 +358,7 @@ export const MessageWindow: React.FC<MessageWindowProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',

@@ -1,5 +1,6 @@
 import { ENV } from '../config/env';
 import { ApiResponse, RequestOptions } from '../types';
+import { extractBackendErrorMessages } from '../utils/registrationHelpers';
 import { AuthStorage } from './authStorage';
 
 /**
@@ -14,14 +15,17 @@ export class ApiClient {
   /**
    * Helper to build standard request headers, including Bearer token if present
    */
-  private static async buildHeaders(customHeaders?: Record<string, string>): Promise<Record<string, string>> {
+  private static async buildHeaders(
+    customHeaders?: Record<string, string>,
+    skipAuth?: boolean
+  ): Promise<Record<string, string>> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
       ...customHeaders,
     };
 
-    if (!headers['Authorization']) {
+    if (!skipAuth && !headers['Authorization']) {
       try {
         const token = await AuthStorage.getAccessToken();
         if (token) {
@@ -67,7 +71,7 @@ export class ApiClient {
     }, customOptions?.timeoutMs ?? this.DEFAULT_TIMEOUT_MS);
 
     try {
-      const headers = await this.buildHeaders(customOptions?.headers);
+      const headers = await this.buildHeaders(customOptions?.headers, customOptions?.skipAuth);
       let response = await fetch(fullUrl, {
         ...options,
         headers,
@@ -78,6 +82,7 @@ export class ApiClient {
       if (
         response.status === 401 &&
         !isRetry &&
+        !customOptions?.skipAuth &&
         !cleanEndpoint.includes('auth/login') &&
         !cleanEndpoint.includes('auth/register') &&
         !cleanEndpoint.includes('auth/refresh-token')
@@ -132,13 +137,8 @@ export class ApiClient {
       }
 
       if (!response.ok) {
-        const errorData = parsedData as Record<string, unknown> | undefined;
-        const backendMessage =
-          (typeof errorData?.message === 'string' && errorData.message) ||
-          (Array.isArray(errorData?.message) && (errorData.message as string[]).join(', ')) ||
-          (typeof errorData?.error === 'string' && errorData.error) ||
-          (Array.isArray(errorData?.errors) && (errorData.errors as string[]).join(', ')) ||
-          `HTTP Error ${response.status}: ${response.statusText || 'Request failed'}`;
+        const fallback = `HTTP Error ${response.status}: ${response.statusText || 'Request failed'}`;
+        const backendMessage = extractBackendErrorMessages(parsedData, fallback).join(', ');
 
         return {
           status: response.status,
@@ -261,7 +261,7 @@ export class ApiClient {
     const cleanBaseUrl = ENV.API_URL.replace(/\/+$/, '');
     const fullUrl = `${cleanBaseUrl}${cleanEndpoint}`;
 
-    const token = await AuthStorage.getAccessToken();
+    const token = customOptions?.skipAuth ? null : await AuthStorage.getAccessToken();
 
     return new Promise<ApiResponse<T>>((resolve) => {
       const xhr = new XMLHttpRequest();
@@ -312,12 +312,8 @@ export class ApiClient {
             data: parsedData,
           });
         } else {
-          const errorData = parsedData as Record<string, unknown> | undefined;
-          const backendMessage =
-            (typeof errorData?.message === 'string' && errorData.message) ||
-            (typeof errorData?.error === 'string' && errorData.error) ||
-            (Array.isArray(errorData?.errors) && errorData.errors.join(', ')) ||
-            `HTTP Error ${xhr.status}: ${xhr.statusText || 'Upload failed'}`;
+          const fallback = `HTTP Error ${xhr.status}: ${xhr.statusText || 'Upload failed'}`;
+          const backendMessage = extractBackendErrorMessages(parsedData, fallback).join(', ');
 
           resolve({
             status: xhr.status,

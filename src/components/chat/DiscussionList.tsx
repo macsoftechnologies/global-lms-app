@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ForumTopic, ChatRole } from '../../types/chat';
+import { useTheme } from '../../context/ThemeContext';
 
 interface DiscussionListProps {
   topics: ForumTopic[];
@@ -44,6 +45,52 @@ export const DiscussionList: React.FC<DiscussionListProps> = ({
   onRefresh,
   refreshing = false,
 }) => {
+  const { isDarkMode } = useTheme();
+  const styles = React.useMemo(() => {
+    if (!isDarkMode) return baseStyles;
+    return {
+      ...baseStyles,
+      container: StyleSheet.flatten([baseStyles.container, { backgroundColor: '#0B0F19' }]) as typeof baseStyles.container,
+      topBar: StyleSheet.flatten([baseStyles.topBar, { backgroundColor: '#111827', borderBottomColor: '#1F2937' }]) as typeof baseStyles.topBar,
+      searchBox: StyleSheet.flatten([baseStyles.searchBox, { backgroundColor: '#1E293B', borderColor: '#334155' }]) as typeof baseStyles.searchBox,
+      searchInput: StyleSheet.flatten([baseStyles.searchInput, { color: '#F8FAFC' }]) as typeof baseStyles.searchInput,
+      categoriesContainer: StyleSheet.flatten([baseStyles.categoriesContainer, { backgroundColor: '#111827', borderBottomColor: '#1F2937' }]) as typeof baseStyles.categoriesContainer,
+      categoryTab: StyleSheet.flatten([baseStyles.categoryTab, { backgroundColor: '#1E293B' }]) as typeof baseStyles.categoryTab,
+      categoryTabActive: StyleSheet.flatten([baseStyles.categoryTabActive, { backgroundColor: '#312E81' }]) as typeof baseStyles.categoryTabActive,
+      categoryTabText: StyleSheet.flatten([baseStyles.categoryTabText, { color: '#94A3B8' }]) as typeof baseStyles.categoryTabText,
+      categoryTabTextActive: StyleSheet.flatten([baseStyles.categoryTabTextActive, { color: '#C7D2FE' }]) as typeof baseStyles.categoryTabTextActive,
+      card: StyleSheet.flatten([baseStyles.card, { backgroundColor: '#161F30', borderColor: '#1F2937' }]) as typeof baseStyles.card,
+      cardPinned: StyleSheet.flatten([baseStyles.cardPinned, { backgroundColor: '#1F1A10', borderColor: '#B45309' }]) as typeof baseStyles.cardPinned,
+      pinnedHeader: StyleSheet.flatten([baseStyles.pinnedHeader, { borderBottomColor: '#78350F' }]) as typeof baseStyles.pinnedHeader,
+      pinnedHeaderText: StyleSheet.flatten([baseStyles.pinnedHeaderText, { color: '#FBBF24' }]) as typeof baseStyles.pinnedHeaderText,
+      authorName: StyleSheet.flatten([baseStyles.authorName, { color: '#F8FAFC' }]) as typeof baseStyles.authorName,
+      roleTagAdmin: StyleSheet.flatten([baseStyles.roleTagAdmin, { backgroundColor: '#312E81' }]) as typeof baseStyles.roleTagAdmin,
+      roleTagStudent: StyleSheet.flatten([baseStyles.roleTagStudent, { backgroundColor: '#0C4A6E' }]) as typeof baseStyles.roleTagStudent,
+      roleTagTextAdmin: StyleSheet.flatten([baseStyles.roleTagTextAdmin, { color: '#C7D2FE' }]) as typeof baseStyles.roleTagTextAdmin,
+      roleTagTextStudent: StyleSheet.flatten([baseStyles.roleTagTextStudent, { color: '#7DD3FC' }]) as typeof baseStyles.roleTagTextStudent,
+      categoryChip: StyleSheet.flatten([baseStyles.categoryChip, { backgroundColor: '#1E293B' }]) as typeof baseStyles.categoryChip,
+      categoryChipText: StyleSheet.flatten([baseStyles.categoryChipText, { color: '#CBD5E1' }]) as typeof baseStyles.categoryChipText,
+      topicTitle: StyleSheet.flatten([baseStyles.topicTitle, { color: '#F8FAFC' }]) as typeof baseStyles.topicTitle,
+      topicContent: StyleSheet.flatten([baseStyles.topicContent, { color: '#CBD5E1' }]) as typeof baseStyles.topicContent,
+      footerRow: StyleSheet.flatten([baseStyles.footerRow, { borderTopColor: '#1F2937' }]) as typeof baseStyles.footerRow,
+      statText: StyleSheet.flatten([baseStyles.statText, { color: '#94A3B8' }]) as typeof baseStyles.statText,
+      viewThreadText: StyleSheet.flatten([baseStyles.viewThreadText, { color: '#818CF8' }]) as typeof baseStyles.viewThreadText,
+      emptyTitle: StyleSheet.flatten([baseStyles.emptyTitle, { color: '#E2E8F0' }]) as typeof baseStyles.emptyTitle,
+      emptySubtitle: StyleSheet.flatten([baseStyles.emptySubtitle, { color: '#94A3B8' }]) as typeof baseStyles.emptySubtitle,
+      modalContent: StyleSheet.flatten([baseStyles.modalContent, { backgroundColor: '#161F30' }]) as typeof baseStyles.modalContent,
+      modalHeader: StyleSheet.flatten([baseStyles.modalHeader, { borderBottomColor: '#1F2937' }]) as typeof baseStyles.modalHeader,
+      modalIconBox: StyleSheet.flatten([baseStyles.modalIconBox, { backgroundColor: '#312E81' }]) as typeof baseStyles.modalIconBox,
+      modalTitle: StyleSheet.flatten([baseStyles.modalTitle, { color: '#F8FAFC' }]) as typeof baseStyles.modalTitle,
+      inputLabel: StyleSheet.flatten([baseStyles.inputLabel, { color: '#CBD5E1' }]) as typeof baseStyles.inputLabel,
+      modalTextInput: StyleSheet.flatten([baseStyles.modalTextInput, { backgroundColor: '#1E293B', borderColor: '#334155', color: '#F8FAFC' }]) as typeof baseStyles.modalTextInput,
+      catPill: StyleSheet.flatten([baseStyles.catPill, { backgroundColor: '#1E293B' }]) as typeof baseStyles.catPill,
+      catPillText: StyleSheet.flatten([baseStyles.catPillText, { color: '#94A3B8' }]) as typeof baseStyles.catPillText,
+      modalFooter: StyleSheet.flatten([baseStyles.modalFooter, { borderTopColor: '#1F2937' }]) as typeof baseStyles.modalFooter,
+      modalCancelBtn: StyleSheet.flatten([baseStyles.modalCancelBtn, { backgroundColor: '#1E293B' }]) as typeof baseStyles.modalCancelBtn,
+      modalCancelText: StyleSheet.flatten([baseStyles.modalCancelText, { color: '#CBD5E1' }]) as typeof baseStyles.modalCancelText,
+    };
+  }, [isDarkMode]);
+
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -322,7 +369,7 @@ export const DiscussionList: React.FC<DiscussionListProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',

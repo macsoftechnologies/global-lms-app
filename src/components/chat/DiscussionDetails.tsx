@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { ForumTopic, ForumReply, ChatRole } from '../../types/chat';
 import { MessageInput } from './MessageInput';
+import { useTheme } from '../../context/ThemeContext';
 
 interface DiscussionDetailsProps {
   topic: ForumTopic;
@@ -28,6 +29,38 @@ export const DiscussionDetails: React.FC<DiscussionDetailsProps> = ({
   onTogglePin,
   onDeleteTopic,
 }) => {
+  const { isDarkMode } = useTheme();
+  const styles = React.useMemo(() => {
+    if (!isDarkMode) return baseStyles;
+    return {
+      ...baseStyles,
+      container: StyleSheet.flatten([baseStyles.container, { backgroundColor: '#0B0F19' }]) as typeof baseStyles.container,
+      topBar: StyleSheet.flatten([baseStyles.topBar, { backgroundColor: '#111827', borderBottomColor: '#1F2937' }]) as typeof baseStyles.topBar,
+      topBarTitle: StyleSheet.flatten([baseStyles.topBarTitle, { color: '#F8FAFC' }]) as typeof baseStyles.topBarTitle,
+      actionIconBtn: StyleSheet.flatten([baseStyles.actionIconBtn, { backgroundColor: '#1E293B' }]) as typeof baseStyles.actionIconBtn,
+      deleteBtn: StyleSheet.flatten([baseStyles.deleteBtn, { backgroundColor: '#450A0A' }]) as typeof baseStyles.deleteBtn,
+      topicHeaderContainer: StyleSheet.flatten([baseStyles.topicHeaderContainer, { backgroundColor: '#161F30', borderBottomColor: '#1F2937' }]) as typeof baseStyles.topicHeaderContainer,
+      categoryChip: StyleSheet.flatten([baseStyles.categoryChip, { backgroundColor: '#312E81' }]) as typeof baseStyles.categoryChip,
+      categoryChipText: StyleSheet.flatten([baseStyles.categoryChipText, { color: '#C7D2FE' }]) as typeof baseStyles.categoryChipText,
+      pinnedBadge: StyleSheet.flatten([baseStyles.pinnedBadge, { backgroundColor: '#451A03' }]) as typeof baseStyles.pinnedBadge,
+      pinnedBadgeText: StyleSheet.flatten([baseStyles.pinnedBadgeText, { color: '#FBBF24' }]) as typeof baseStyles.pinnedBadgeText,
+      topicTitle: StyleSheet.flatten([baseStyles.topicTitle, { color: '#F8FAFC' }]) as typeof baseStyles.topicTitle,
+      authorName: StyleSheet.flatten([baseStyles.authorName, { color: '#F8FAFC' }]) as typeof baseStyles.authorName,
+      roleTagAdmin: StyleSheet.flatten([baseStyles.roleTagAdmin, { backgroundColor: '#312E81' }]) as typeof baseStyles.roleTagAdmin,
+      roleTagStudent: StyleSheet.flatten([baseStyles.roleTagStudent, { backgroundColor: '#0C4A6E' }]) as typeof baseStyles.roleTagStudent,
+      roleTagTextAdmin: StyleSheet.flatten([baseStyles.roleTagTextAdmin, { color: '#C7D2FE' }]) as typeof baseStyles.roleTagTextAdmin,
+      roleTagTextStudent: StyleSheet.flatten([baseStyles.roleTagTextStudent, { color: '#7DD3FC' }]) as typeof baseStyles.roleTagTextStudent,
+      topicContent: StyleSheet.flatten([baseStyles.topicContent, { color: '#CBD5E1' }]) as typeof baseStyles.topicContent,
+      repliesDivider: StyleSheet.flatten([baseStyles.repliesDivider, { borderTopColor: '#1F2937' }]) as typeof baseStyles.repliesDivider,
+      repliesCountText: StyleSheet.flatten([baseStyles.repliesCountText, { color: '#F8FAFC' }]) as typeof baseStyles.repliesCountText,
+      replyCard: StyleSheet.flatten([baseStyles.replyCard, { backgroundColor: '#161F30', borderColor: '#1F2937' }]) as typeof baseStyles.replyCard,
+      replyAuthorName: StyleSheet.flatten([baseStyles.replyAuthorName, { color: '#F8FAFC' }]) as typeof baseStyles.replyAuthorName,
+      replyContent: StyleSheet.flatten([baseStyles.replyContent, { color: '#CBD5E1' }]) as typeof baseStyles.replyContent,
+      emptyRepliesText: StyleSheet.flatten([baseStyles.emptyRepliesText, { color: '#94A3B8' }]) as typeof baseStyles.emptyRepliesText,
+      emptyRepliesSubtext: StyleSheet.flatten([baseStyles.emptyRepliesSubtext, { color: '#64748B' }]) as typeof baseStyles.emptyRepliesSubtext,
+    };
+  }, [isDarkMode]);
+
   const isAdmin = currentUserRole === 'admin';
   const isTopicAuthorAdmin = topic.authorRole === 'admin';
 
@@ -173,7 +206,7 @@ export const DiscussionDetails: React.FC<DiscussionDetailsProps> = ({
           onPress={onBack}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="arrow-back" size={20} color="#0F172A" />
+          <Ionicons name="arrow-back" size={20} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
         </TouchableOpacity>
 
         <Text style={styles.topBarTitle} numberOfLines={1}>
@@ -236,7 +269,7 @@ export const DiscussionDetails: React.FC<DiscussionDetailsProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',

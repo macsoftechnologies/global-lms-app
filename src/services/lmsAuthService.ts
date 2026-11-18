@@ -5,15 +5,21 @@ import { AuthStorage } from './authStorage';
 import {
   ApiResponse,
   StudentRegistrationPayload,
+  StudentRegistrationResponse,
   FacultyRegistrationPayload,
   LoginPayload,
   LoginResponseData,
   RegionOption,
   ProgramOption,
+  FormQuestion,
+  PublicSubscriptionPlan,
   DocumentItem,
   UploadResponseData,
   OrganizationInfo,
+  ChangePasswordPayload,
+  ChangePasswordResponse,
 } from '../types';
+import { getUploadMaxBytes, isAllowedUploadFile } from '../utils/registrationHelpers';
 
 /**
  * Resolves standard MIME types from file extensions with fallback.
@@ -47,6 +53,8 @@ function getMimeType(fileName: string, fallbackMime?: string): string {
       return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     case 'txt':
       return 'text/plain';
+    case 'zip':
+      return 'application/zip';
     default:
       return fallbackMime || 'application/octet-stream';
   }
@@ -57,23 +65,25 @@ function getMimeType(fileName: string, fallbackMime?: string): string {
  * Uses native file descriptor { uri, name, type } on Android/iOS,
  * and standard Blob on Web.
  */
-async function buildUploadFormData(file: {
+export async function buildUploadFormData(file: {
   uri: string;
   name: string;
   mimeType?: string;
+  fieldName?: string;
 }): Promise<FormData> {
   const formData = new FormData();
   const mimeType = getMimeType(file.name, file.mimeType);
+  const field = file.fieldName || 'file';
 
   if (Platform.OS === 'web') {
     const blobRes = await fetch(file.uri);
     const blob = await blobRes.blob();
-    formData.append('file', blob, file.name || 'upload.jpg');
+    formData.append(field, blob, file.name || 'upload.pdf');
   } else {
     // React Native Expo native multipart descriptor
-    formData.append('file', {
+    formData.append(field, {
       uri: file.uri,
-      name: file.name || 'upload.jpg',
+      name: file.name || 'upload.pdf',
       type: mimeType,
     } as unknown as Blob);
   }
@@ -81,251 +91,507 @@ async function buildUploadFormData(file: {
   return formData;
 }
 
-/**
- * LMS Authentication & Registration Service
- * 
- * Implemented directly against 'Student LMS API Collection' Postman collection:
- * - Complete Student Registration: POST /auth/register
- * - Get Available Regions: GET /regions?slug={{orgSlug}}&localOnly=true
- * - Get Available Programs: GET /programs/public?limit=100&slug={{orgSlug}}
- * - Upload Public Document: POST /upload/public?folder=profiles
- * - Login: POST /auth/login
- * - Refresh Token: POST /auth/refresh-token
- * - Logout: POST /auth/logout
- */
-export const LmsAuthService = {
-  /**
-   * Get Public Organization Info by Slug
-   * Matches Postman: GET /public/organizations/{{orgSlug}}
-   */
-  async getPublicOrganization(slug?: string): Promise<ApiResponse<OrganizationInfo>> {
-    const storedSlug = await AuthStorage.getOrganizationCode();
-    const rawSlug = slug?.trim() || storedSlug || ENV.DEFAULT_ORG_SLUG || 'org1';
-    const cleanSlug = rawSlug.toLowerCase() === 'cotr' ? 'org1' : rawSlug;
-    const endpoint = `public/organizations/${encodeURIComponent(cleanSlug)}`;
+const PUBLIC_CACHE_TTL_MS = 60_000;
+const inFlightPublicRequests = new Map<string, Promise<ApiResponse<unknown>>>();
+const publicResponseCache = new Map<string, { expiresAt: number; response: ApiResponse<unknown> }>();
 
+async function fetchPublicCached<T>(
+  cacheKey: string,
+  fetcher: () => Promise<ApiResponse<T>>,
+  forceRefresh: boolean = false
+): Promise<ApiResponse<T>> {
+  const now = Date.now();
+  if (!forceRefresh) {
+    const cached = publicResponseCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      return cached.response as ApiResponse<T>;
+    }
+    const existing = inFlightPublicRequests.get(cacheKey);
+    if (existing) {
+      return existing as Promise<ApiResponse<T>>;
+    }
+  } else {
+    publicResponseCache.delete(cacheKey);
+  }
+
+  const pending = (async (): Promise<ApiResponse<T>> => {
     try {
-      const response = await ApiClient.get<OrganizationInfo | { data: OrganizationInfo }>(endpoint);
-      if (response.success && response.data) {
-        const orgData =
-          'data' in response.data && (response.data as { data: OrganizationInfo }).data
-            ? (response.data as { data: OrganizationInfo }).data
-            : (response.data as OrganizationInfo);
-
-        if (orgData && orgData.slug) {
-          await AuthStorage.setOrganizationCode(orgData.slug);
-          await AuthStorage.setOrganizationDetails(orgData);
-          return {
-            status: response.status,
-            success: true,
-            data: orgData,
-          };
-        }
+      const result = await fetcher();
+      if (result.success) {
+        publicResponseCache.set(cacheKey, {
+          expiresAt: Date.now() + PUBLIC_CACHE_TTL_MS,
+          response: result,
+        });
       }
-      return response as ApiResponse<OrganizationInfo>;
-    } catch (err: unknown) {
-      return {
-        status: 0,
-        success: false,
-        error: err instanceof Error ? err.message : 'Failed to retrieve organization info',
-      };
+      return result;
+    } finally {
+      inFlightPublicRequests.delete(cacheKey);
     }
-  },
+  })();
 
-  /**
-   * 1. Get Available Regions for Registration
-   * Matches Postman: GET /regions?slug={{orgSlug}}&localOnly=true
-   */
-  async getAvailableRegions(slugOverride?: string): Promise<ApiResponse<RegionOption[]>> {
-    const storedSlug = await AuthStorage.getOrganizationCode();
-    const rawSlug = slugOverride?.trim() || storedSlug || ENV.DEFAULT_ORG_SLUG || 'org1';
-    const slug = rawSlug.toLowerCase() === 'cotr' ? 'org1' : rawSlug;
-    const endpoint = `regions?slug=${encodeURIComponent(slug)}&localOnly=true`;
+  inFlightPublicRequests.set(cacheKey, pending as Promise<ApiResponse<unknown>>);
+  return pending;
+}
 
-    const defaultFallbackRegions: RegionOption[] = [
-      { id: 'reg-india-south', name: 'India - Southern Region (AP, TS, TN, KA, KL)' },
-      { id: 'reg-india-north', name: 'India - Northern & Central Region' },
-      { id: 'reg-india-ne', name: 'India - North East Region' },
-      { id: 'reg-international', name: 'International / Global Online' },
-    ];
+function unwrapDataPayload<T>(raw: unknown): T | null {
+  if (!raw || typeof raw !== 'object') return (raw as T) ?? null;
+  if ('data' in raw && (raw as { data?: T }).data !== undefined) {
+    return (raw as { data: T }).data;
+  }
+  return raw as T;
+}
 
-    if (!ENV.IS_API_CONFIGURED) {
-      return {
-        status: 200,
-        success: true,
-        data: defaultFallbackRegions,
-      };
-    }
+function extractListPayload<T>(raw: unknown): T[] {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === 'object') {
+    const obj = raw as { data?: unknown; items?: unknown; results?: unknown };
+    if (Array.isArray(obj.data)) return obj.data as T[];
+    if (Array.isArray(obj.items)) return obj.items as T[];
+    if (Array.isArray(obj.results)) return obj.results as T[];
+  }
+  return [];
+}
 
-    try {
-      const response = await ApiClient.get<RegionOption[] | { data: RegionOption[] }>(endpoint);
+async function resolveTargetOrgSlug(explicitSlug?: string): Promise<string> {
+  if (explicitSlug !== undefined) {
+    const trimmed = explicitSlug.trim();
+    if (trimmed) return trimmed;
+  }
+  const stored = (await AuthStorage.getOrganizationCode())?.trim();
+  if (stored && stored.toLowerCase() !== 'cotr') {
+    return stored;
+  }
+  return ENV.DEFAULT_ORG_SLUG || 'org1';
+}
 
-      if (response.success && response.data) {
-        // Backend might wrap list inside response.data.data
-        const raw = response.data;
-        const list = Array.isArray(raw)
-          ? raw
-          : Array.isArray((raw as { data?: RegionOption[] }).data)
-            ? (raw as { data: RegionOption[] }).data
-            : defaultFallbackRegions;
+async function executeUploadRequest(
+  endpoint: string,
+  file: { uri: string; name: string; mimeType?: string; size?: number },
+  options?: {
+    headers?: Record<string, string>;
+    skipAuth?: boolean;
+    onProgress?: (progress: number) => void;
+  }
+): Promise<ApiResponse<DocumentItem>> {
+  if (!ENV.IS_API_CONFIGURED) {
+    return {
+      status: 0,
+      success: false,
+      error: 'Backend API URL is not configured. Cannot upload file.',
+    };
+  }
 
-        return {
-          status: response.status,
-          success: true,
-          data: list.length > 0 ? list : defaultFallbackRegions,
-        };
+  try {
+    const formData = await buildUploadFormData(file);
+    const response = await ApiClient.upload<UploadResponseData | { data: UploadResponseData }>(
+      endpoint,
+      formData,
+      {
+        headers: options?.headers,
+        skipAuth: options?.skipAuth,
+        onProgress: options?.onProgress,
       }
+    );
 
-      // Fallback on network or 404 error during development
-      return {
-        status: 200,
-        success: true,
-        data: defaultFallbackRegions,
-      };
-    } catch {
-      return {
-        status: 200,
-        success: true,
-        data: defaultFallbackRegions,
-      };
-    }
-  },
-
-  /**
-   * 2. Get Available Programs for Registration Dropdown
-   * Matches Postman: GET /programs/public?limit=100&slug={{orgSlug}}
-   */
-  async getAvailablePrograms(slugOverride?: string): Promise<ApiResponse<ProgramOption[]>> {
-    const storedSlug = await AuthStorage.getOrganizationCode();
-    const rawSlug = slugOverride?.trim() || storedSlug || ENV.DEFAULT_ORG_SLUG || 'org1';
-    const slug = rawSlug.toLowerCase() === 'cotr' ? 'org1' : rawSlug;
-    const endpoint = `programs/public?limit=100&slug=${encodeURIComponent(slug)}`;
-
-    const defaultFallbackPrograms: ProgramOption[] = [
-      { id: 'prog-bth', name: 'Bachelor of Theology (B.Th)' },
-      { id: 'prog-mdiv', name: 'Master of Divinity (M.Div)' },
-      { id: 'prog-dipth', name: 'Diploma in Theology (Dip.Th)' },
-      { id: 'prog-mth', name: 'Master of Theology (M.Th)' },
-      { id: 'prog-cert-ministry', name: 'Certificate in Christian Ministry' },
-    ];
-
-    if (!ENV.IS_API_CONFIGURED) {
-      return {
-        status: 200,
-        success: true,
-        data: defaultFallbackPrograms,
-      };
-    }
-
-    try {
-      const response = await ApiClient.get<ProgramOption[] | { data: ProgramOption[] }>(endpoint);
-
-      if (response.success && response.data) {
-        const raw = response.data;
-        const list = Array.isArray(raw)
-          ? raw
-          : Array.isArray((raw as { data?: ProgramOption[] }).data)
-            ? (raw as { data: ProgramOption[] }).data
-            : defaultFallbackPrograms;
-
-        return {
-          status: response.status,
-          success: true,
-          data: list.length > 0 ? list : defaultFallbackPrograms,
-        };
-      }
-
-      return {
-        status: 200,
-        success: true,
-        data: defaultFallbackPrograms,
-      };
-    } catch {
-      return {
-        status: 200,
-        success: true,
-        data: defaultFallbackPrograms,
-      };
-    }
-  },
-
-  /**
-   * 3. Upload Public Verification Document / Photo
-   * Matches Postman: POST /upload/public?folder=profiles
-   * Multipart Form-data where field key is 'file' (Max 5MB)
-   */
-  async uploadVerificationDocument(file: {
-    uri: string;
-    name: string;
-    mimeType?: string;
-    size?: number;
-  }, onProgress?: (progress: number) => void): Promise<ApiResponse<DocumentItem>> {
-    // 5MB max check as documented in Postman collection
-    const MAX_SIZE_BYTES = 5 * 1024 * 1024;
-    if (file.size && file.size > MAX_SIZE_BYTES) {
-      return {
-        status: 400,
-        success: false,
-        error: `File size exceeds the 5MB limit (${(file.size / (1024 * 1024)).toFixed(2)} MB). Please select a smaller file.`,
-      };
-    }
-
-    if (!ENV.IS_API_CONFIGURED) {
-      // Offline / Local preview fallback only when backend is intentionally unconfigured
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({
-            status: 201,
-            success: true,
-            data: {
-              url: `/uploads/profiles/${file.name}`,
-              name: file.name,
-              size: file.size || 250000,
-            },
-          });
-        }, 500);
-      });
-    }
-
-    try {
-      const formData = await buildUploadFormData(file);
-
-      const response = await ApiClient.upload<UploadResponseData | { data: UploadResponseData }>(
-        'upload/public?folder=profiles',
-        formData,
-        { onProgress }
-      );
-
-      if (response.success && response.data) {
-        const payloadData =
-          'data' in response.data && (response.data as { data: UploadResponseData }).data
-            ? (response.data as { data: UploadResponseData }).data
-            : (response.data as UploadResponseData);
-
+    if (response.success && response.data) {
+      const payloadData = unwrapDataPayload<UploadResponseData>(response.data);
+      const uploadedUrl = payloadData?.url || payloadData?.path;
+      if (uploadedUrl && typeof uploadedUrl === 'string' && uploadedUrl.trim().length > 0) {
         return {
           status: response.status,
           success: true,
           data: {
-            url: payloadData.url || `/uploads/profiles/${file.name}`,
+            url: uploadedUrl.trim(),
             name: payloadData.name || payloadData.originalName || file.name,
             size: payloadData.size || file.size,
           },
         };
       }
 
-      // Return server rejection error without silently masking with preview data
       return {
-        status: response.status,
+        status: response.status || 500,
         success: false,
-        error: response.error || 'Server rejected the file upload.',
+        error: 'Upload succeeded, but the server did not return a valid file URL.',
       };
-    } catch (err: unknown) {
+    }
+
+    return {
+      status: response.status,
+      success: false,
+      error: response.error || 'Server rejected the file upload.',
+    };
+  } catch (err: unknown) {
+    return {
+      status: 0,
+      success: false,
+      error: err instanceof Error ? err.message : 'Network error during file upload.',
+    };
+  }
+}
+
+/**
+ * LMS Authentication & Registration Service
+ * 
+ * Implemented directly against 'Student LMS API Collection' Postman collection:
+ * - Get Organization by Slug: GET /public/organizations/{{orgSlug}}
+ * - Get Available Regions: GET /regions?slug={{orgSlug}}&localOnly=true
+ * - Get Available Programs: GET /programs/public?limit=100&slug={{orgSlug}}
+ * - Get Form Questions: GET /form-questions
+ * - Get Subscription Plans: GET /subscription-plans/public?regionId={{regionId}}
+ * - Upload Public Document: POST /upload/public?folder=profiles
+ * - Complete Student Registration: POST /auth/register
+ * - Login: POST /auth/login
+ * - Refresh Token: POST /auth/refresh-token
+ * - Logout: POST /auth/logout
+ */
+export const LmsAuthService = {
+  /**
+   * Clears cached public lookups so switching organization always fetches fresh data.
+   */
+  clearPublicLookupCache(): void {
+    publicResponseCache.clear();
+  },
+
+  /**
+   * Get Public Organization Info by Slug
+   * Matches Postman: GET /public/organizations/{{orgSlug}}
+   */
+  async getPublicOrganization(
+    slug?: string,
+    options?: { forceRefresh?: boolean; persistOnSuccess?: boolean }
+  ): Promise<ApiResponse<OrganizationInfo>> {
+    if (!ENV.IS_API_CONFIGURED) {
       return {
         status: 0,
         success: false,
-        error: err instanceof Error ? err.message : 'Network error during file upload',
+        error: 'Backend API URL is not configured. Please set EXPO_PUBLIC_API_URL in .env.',
       };
     }
+
+    const cleanSlug = await resolveTargetOrgSlug(slug);
+    const cacheKey = `org:${cleanSlug.toLowerCase()}`;
+
+    return fetchPublicCached<OrganizationInfo>(
+      cacheKey,
+      async () => {
+        try {
+          const endpoint = `public/organizations/${encodeURIComponent(cleanSlug)}`;
+          const response = await ApiClient.get<OrganizationInfo | { data: OrganizationInfo }>(
+            endpoint,
+            { skipAuth: true }
+          );
+          if (response.success && response.data) {
+            const orgData = unwrapDataPayload<OrganizationInfo>(response.data);
+            if (orgData && (orgData.slug || orgData.id)) {
+              if (options?.persistOnSuccess !== false && orgData.slug) {
+                await AuthStorage.setOrganizationCode(orgData.slug);
+                await AuthStorage.setOrganizationDetails(orgData);
+              }
+              return {
+                status: response.status,
+                success: true,
+                data: orgData,
+              };
+            }
+          }
+          return {
+            status: response.status,
+            success: false,
+            error: response.error || `Organization "${cleanSlug}" was not found.`,
+          };
+        } catch (err: unknown) {
+          return {
+            status: 0,
+            success: false,
+            error: err instanceof Error ? err.message : 'Failed to retrieve organization info',
+          };
+        }
+      },
+      options?.forceRefresh
+    );
+  },
+
+  /**
+   * 1. Get Available Regions for Registration
+   * Matches Postman: GET /regions?slug={{orgSlug}}&localOnly=true
+   */
+  async getAvailableRegions(
+    slugOverride?: string,
+    options?: { forceRefresh?: boolean }
+  ): Promise<ApiResponse<RegionOption[]>> {
+    if (!ENV.IS_API_CONFIGURED) {
+      return {
+        status: 0,
+        success: false,
+        error: 'Backend API URL is not configured. Please set EXPO_PUBLIC_API_URL in .env.',
+      };
+    }
+
+    const slug = await resolveTargetOrgSlug(slugOverride);
+    const cacheKey = `regions:${slug.toLowerCase()}`;
+
+    return fetchPublicCached<RegionOption[]>(
+      cacheKey,
+      async () => {
+        try {
+          const endpoint = `regions?slug=${encodeURIComponent(slug)}&localOnly=true`;
+          const response = await ApiClient.get<RegionOption[] | { data: RegionOption[] }>(
+            endpoint,
+            { skipAuth: true }
+          );
+
+          if (response.success) {
+            const rawList = extractListPayload<RegionOption & { _id?: string }>(response.data);
+            const normalized: RegionOption[] = rawList
+              .map((item) => ({
+                ...item,
+                id: String(item.id || item._id || ''),
+              }))
+              .filter((item) => item.id.length > 0 && item.name);
+
+            return {
+              status: response.status,
+              success: true,
+              data: normalized,
+            };
+          }
+
+          return {
+            status: response.status,
+            success: false,
+            error: response.error || 'Failed to load regions for this organization.',
+          };
+        } catch (err: unknown) {
+          return {
+            status: 0,
+            success: false,
+            error: err instanceof Error ? err.message : 'Network error while loading regions.',
+          };
+        }
+      },
+      options?.forceRefresh
+    );
+  },
+
+  /**
+   * 2. Get Available Programs for Registration Dropdown / Catalog
+   * Matches Postman: GET /programs/public?limit=100&slug={{orgSlug}}
+   */
+  async getAvailablePrograms(
+    slugOverride?: string,
+    options?: { limit?: number; page?: number; forceRefresh?: boolean }
+  ): Promise<ApiResponse<ProgramOption[]>> {
+    if (!ENV.IS_API_CONFIGURED) {
+      return {
+        status: 0,
+        success: false,
+        error: 'Backend API URL is not configured. Please set EXPO_PUBLIC_API_URL in .env.',
+      };
+    }
+
+    const slug = await resolveTargetOrgSlug(slugOverride);
+    const limit = options?.limit ?? 100;
+    const pageParam = options?.page ? `&page=${encodeURIComponent(String(options.page))}` : '';
+    const cacheKey = `programs:${slug.toLowerCase()}:${limit}:${options?.page ?? 1}`;
+
+    return fetchPublicCached<ProgramOption[]>(
+      cacheKey,
+      async () => {
+        try {
+          const endpoint = `programs/public?limit=${encodeURIComponent(String(limit))}${pageParam}&slug=${encodeURIComponent(slug)}`;
+          const response = await ApiClient.get<ProgramOption[] | { data: ProgramOption[] }>(
+            endpoint,
+            { skipAuth: true }
+          );
+
+          if (response.success) {
+            const rawList = extractListPayload<ProgramOption & { _id?: string }>(response.data);
+            const normalized: ProgramOption[] = rawList
+              .map((item) => ({
+                ...item,
+                id: String(item.id || item._id || ''),
+              }))
+              .filter((item) => item.id.length > 0 && item.name);
+
+            return {
+              status: response.status,
+              success: true,
+              data: normalized,
+            };
+          }
+
+          return {
+            status: response.status,
+            success: false,
+            error: response.error || 'Failed to load available programs.',
+          };
+        } catch (err: unknown) {
+          return {
+            status: 0,
+            success: false,
+            error: err instanceof Error ? err.message : 'Network error while loading programs.',
+          };
+        }
+      },
+      options?.forceRefresh
+    );
+  },
+
+  /**
+   * 2b. Get Dynamic Registration Form Questions
+   * Matches backend: GET /form-questions
+   */
+  async getRegistrationFormQuestions(
+    options?: { forceRefresh?: boolean }
+  ): Promise<ApiResponse<FormQuestion[]>> {
+    if (!ENV.IS_API_CONFIGURED) {
+      return {
+        status: 0,
+        success: false,
+        error: 'Backend API URL is not configured. Please set EXPO_PUBLIC_API_URL in .env.',
+      };
+    }
+
+    return fetchPublicCached<FormQuestion[]>(
+      'form-questions',
+      async () => {
+        try {
+          const response = await ApiClient.get<FormQuestion[] | { data: FormQuestion[] }>(
+            'form-questions',
+            { skipAuth: true }
+          );
+
+          if (response.success) {
+            const rawList = extractListPayload<FormQuestion>(response.data);
+            const sorted = [...rawList]
+              .filter((q) => q && q.key && q.isActive !== false)
+              .sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
+
+            return {
+              status: response.status,
+              success: true,
+              data: sorted,
+            };
+          }
+
+          return {
+            status: response.status,
+            success: false,
+            error: response.error || 'Failed to load admission form questions.',
+          };
+        } catch (err: unknown) {
+          return {
+            status: 0,
+            success: false,
+            error:
+              err instanceof Error ? err.message : 'Network error while loading form questions.',
+          };
+        }
+      },
+      options?.forceRefresh
+    );
+  },
+
+  /**
+   * 2c. Get Public Subscription Plans by Region
+   * Matches Postman: GET /subscription-plans/public?regionId={{regionId}}
+   */
+  async getPublicSubscriptionPlans(
+    regionId: string,
+    options?: { forceRefresh?: boolean }
+  ): Promise<ApiResponse<PublicSubscriptionPlan[]>> {
+    if (!ENV.IS_API_CONFIGURED) {
+      return {
+        status: 0,
+        success: false,
+        error: 'Backend API URL is not configured. Please set EXPO_PUBLIC_API_URL in .env.',
+      };
+    }
+
+    const cleanRegionId = regionId.trim();
+    if (!cleanRegionId) {
+      return {
+        status: 400,
+        success: false,
+        error: 'Region ID is required to fetch subscription plans.',
+      };
+    }
+
+    const cacheKey = `subscription-plans:${cleanRegionId}`;
+    return fetchPublicCached<PublicSubscriptionPlan[]>(
+      cacheKey,
+      async () => {
+        try {
+          const response = await ApiClient.get<
+            PublicSubscriptionPlan[] | { data: PublicSubscriptionPlan[] }
+          >(`subscription-plans/public?regionId=${encodeURIComponent(cleanRegionId)}`, {
+            skipAuth: true,
+          });
+
+          if (response.success) {
+            const list = extractListPayload<PublicSubscriptionPlan>(response.data);
+            return {
+              status: response.status,
+              success: true,
+              data: list,
+            };
+          }
+
+          return {
+            status: response.status,
+            success: false,
+            error: response.error || 'Failed to load subscription plans.',
+          };
+        } catch (err: unknown) {
+          return {
+            status: 0,
+            success: false,
+            error:
+              err instanceof Error
+                ? err.message
+                : 'Network error while loading subscription plans.',
+          };
+        }
+      },
+      options?.forceRefresh
+    );
+  },
+
+  /**
+   * 3. Upload Public Verification Document / Photo
+   * Matches Postman: POST /upload/public?folder=profiles
+   * Multipart Form-data where field key is 'file'
+   */
+  async uploadVerificationDocument(
+    file: {
+      uri: string;
+      name: string;
+      mimeType?: string;
+      size?: number;
+    },
+    onProgress?: (progress: number) => void,
+    options?: { imageOnly?: boolean; folder?: string }
+  ): Promise<ApiResponse<DocumentItem>> {
+    const kind = options?.imageOnly ? 'photo' : 'document';
+    const maxBytes = getUploadMaxBytes(kind);
+    const validation = isAllowedUploadFile(file, {
+      imageOnly: options?.imageOnly,
+      maxBytes,
+    });
+    if (!validation.valid) {
+      return {
+        status: 400,
+        success: false,
+        error: validation.reason || 'Invalid upload file.',
+      };
+    }
+
+    const folder = options?.folder || 'profiles';
+    return executeUploadRequest(
+      `upload/public?folder=${encodeURIComponent(folder)}`,
+      file,
+      { skipAuth: true, onProgress }
+    );
   },
 
   /**
@@ -344,7 +610,7 @@ export const LmsAuthService = {
     folder: string = 'submissions',
     onProgress?: (progress: number) => void
   ): Promise<ApiResponse<DocumentItem>> {
-    const MAX_SIZE_BYTES = 25 * 1024 * 1024; // 25MB as per Postman
+    const MAX_SIZE_BYTES = 25 * 1024 * 1024;
     if (file.size && file.size > MAX_SIZE_BYTES) {
       return {
         status: 400,
@@ -353,73 +619,27 @@ export const LmsAuthService = {
       };
     }
 
-    if (!ENV.IS_API_CONFIGURED) {
-      return {
-        status: 201,
-        success: true,
-        data: {
-          url: `/uploads/${folder}/${file.name}`,
-          name: file.name,
-          size: file.size || 500000,
-        },
-      };
+    const token = await AuthStorage.getAccessToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
-    try {
-      const token = await AuthStorage.getAccessToken();
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const formData = await buildUploadFormData(file);
-      const endpoint = `upload?folder=${encodeURIComponent(folder)}`;
-
-      const response = await ApiClient.upload<UploadResponseData | { data: UploadResponseData }>(
-        endpoint,
-        formData,
-        { headers, onProgress }
-      );
-
-      if (response.success && response.data) {
-        const payloadData =
-          'data' in response.data && (response.data as { data: UploadResponseData }).data
-            ? (response.data as { data: UploadResponseData }).data
-            : (response.data as UploadResponseData);
-
-        return {
-          status: response.status,
-          success: true,
-          data: {
-            url: payloadData.url || `/uploads/${folder}/${file.name}`,
-            name: payloadData.name || payloadData.originalName || file.name,
-            size: payloadData.size || file.size,
-          },
-        };
-      }
-
-      return {
-        status: response.status,
-        success: false,
-        error: response.error || 'Server rejected the file upload.',
-      };
-    } catch (err: unknown) {
-      return {
-        status: 0,
-        success: false,
-        error: err instanceof Error ? err.message : 'Network error during file upload',
-      };
-    }
+    return executeUploadRequest(
+      `upload?folder=${encodeURIComponent(folder)}`,
+      file,
+      { headers, onProgress }
+    );
   },
 
   /**
-   * 4. Register Student
+   * 5. Register Student
    * Matches Postman: POST /auth/register
    * Body contains: fullName, email, password, mobile, organizationCode, regionId, ataStatus, customProfile
    */
   async registerStudent(
     payload: StudentRegistrationPayload
-  ): Promise<ApiResponse<{ message: string; user?: unknown; organizationCode?: string }>> {
+  ): Promise<ApiResponse<StudentRegistrationResponse & { organizationCode?: string }>> {
     if (!ENV.IS_API_CONFIGURED) {
       return {
         status: 0,
@@ -429,16 +649,16 @@ export const LmsAuthService = {
     }
 
     try {
-      const orgCodeRaw = payload.organizationCode?.trim() || (await AuthStorage.getOrganizationCode()) || ENV.DEFAULT_ORG_SLUG || 'org1';
-      const orgCode = orgCodeRaw.toLowerCase() === 'cotr' ? 'org1' : orgCodeRaw;
+      const orgCode = await resolveTargetOrgSlug(payload.organizationCode);
       const normalizedPayload: StudentRegistrationPayload = {
         ...payload,
         organizationCode: orgCode,
       };
 
-      const response = await ApiClient.post<{ message: string; user?: unknown; data?: { message?: string } }>('auth/register', normalizedPayload);
+      const response = await ApiClient.post<
+        StudentRegistrationResponse | { data: StudentRegistrationResponse }
+      >('auth/register', normalizedPayload, { skipAuth: true });
 
-      // If backend fails due to network
       if (!response.success && response.status === 0) {
         return {
           status: 0,
@@ -448,27 +668,33 @@ export const LmsAuthService = {
       }
 
       if (response.success) {
-        // Save the valid registered organization code for future logins
         await AuthStorage.setOrganizationCode(orgCode);
+        const unwrapped = unwrapDataPayload<StudentRegistrationResponse>(response.data) || {};
+        const topObj = (response.data || {}) as StudentRegistrationResponse & {
+          data?: StudentRegistrationResponse;
+        };
 
-        const respData = response.data;
         const msg =
-          (respData && 'message' in respData && typeof respData.message === 'string' && respData.message) ||
-          (respData && 'data' in respData && typeof respData.data?.message === 'string' && respData.data.message) ||
+          (typeof topObj.message === 'string' && topObj.message) ||
+          (typeof unwrapped.message === 'string' && unwrapped.message) ||
           'Registration successful. Awaiting interview & admin approval.';
 
         return {
           status: response.status,
           success: true,
           data: {
+            ...unwrapped,
             message: msg,
-            user: respData?.user,
             organizationCode: orgCode,
           },
         };
       }
 
-      return response as ApiResponse<{ message: string; user?: unknown; organizationCode?: string }>;
+      return {
+        status: response.status,
+        success: false,
+        error: response.error || 'Registration failed. Please review your details and try again.',
+      };
     } catch (err: unknown) {
       return {
         status: 0,
@@ -750,7 +976,61 @@ export const LmsAuthService = {
   },
 
   /**
-   * 8. Logout User
+   * 8. Change Password for Authenticated User
+   * Matches Postman: POST /auth/change-password
+   * Security: Never logs passwords or request payloads.
+   */
+  async changePassword(
+    requestData: ChangePasswordPayload
+  ): Promise<ApiResponse<ChangePasswordResponse>> {
+    if (!ENV.IS_API_CONFIGURED) {
+      return {
+        status: 0,
+        success: false,
+        error: 'Backend API URL is not configured. Please set EXPO_PUBLIC_API_URL in .env.',
+      };
+    }
+
+    const accessToken = await AuthStorage.getAccessToken();
+    if (!accessToken) {
+      return {
+        status: 401,
+        success: false,
+        error: 'Your session has expired. Please sign in again to change your password.',
+      };
+    }
+
+    const response = await ApiClient.post<
+      ChangePasswordResponse | { data?: ChangePasswordResponse; message?: string }
+    >('auth/change-password', {
+      old_password: requestData.old_password,
+      new_password: requestData.new_password,
+    });
+
+    if (response.success) {
+      const raw = response.data as
+        | { message?: string; data?: { message?: string } }
+        | undefined;
+      const message =
+        (typeof raw?.message === 'string' && raw.message.trim()) ||
+        (typeof raw?.data?.message === 'string' && raw.data.message.trim()) ||
+        'Password updated successfully.';
+      return {
+        status: response.status,
+        success: true,
+        data: { message },
+      };
+    }
+
+    return {
+      status: response.status,
+      success: false,
+      error: response.error || 'Unable to change password. Please verify your current password.',
+    };
+  },
+
+  /**
+   * 9. Logout User
    */
   async logout(): Promise<void> {
     try {

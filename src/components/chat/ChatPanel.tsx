@@ -28,6 +28,7 @@ import { MessageWindow } from './MessageWindow';
 import { DiscussionList } from './DiscussionList';
 import { DiscussionDetails } from './DiscussionDetails';
 import { NotificationBadge } from './NotificationBadge';
+import { useTheme } from '../../context/ThemeContext';
 
 interface ChatPanelProps {
   visible: boolean;
@@ -40,6 +41,42 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onClose,
   onUnreadChange,
 }) => {
+  const { isDarkMode } = useTheme();
+  const styles = React.useMemo(() => {
+    if (!isDarkMode) return baseStyles;
+    return {
+      ...baseStyles,
+      panelContainer: StyleSheet.flatten([baseStyles.panelContainer, { backgroundColor: '#111827' }]) as typeof baseStyles.panelContainer,
+      topHeader: StyleSheet.flatten([baseStyles.topHeader, { backgroundColor: '#111827', borderBottomColor: '#1F2937' }]) as typeof baseStyles.topHeader,
+      appTitle: StyleSheet.flatten([baseStyles.appTitle, { color: '#F8FAFC' }]) as typeof baseStyles.appTitle,
+      roleSubtext: StyleSheet.flatten([baseStyles.roleSubtext, { color: '#94A3B8' }]) as typeof baseStyles.roleSubtext,
+      roleToggleBtn: StyleSheet.flatten([baseStyles.roleToggleBtn, { backgroundColor: '#1E1B4B', borderColor: '#4338CA' }]) as typeof baseStyles.roleToggleBtn,
+      roleToggleText: StyleSheet.flatten([baseStyles.roleToggleText, { color: '#A5B4FC' }]) as typeof baseStyles.roleToggleText,
+      adminToolbar: StyleSheet.flatten([baseStyles.adminToolbar, { backgroundColor: '#0F172A', borderBottomColor: '#1F2937' }]) as typeof baseStyles.adminToolbar,
+      adminActionPill: StyleSheet.flatten([baseStyles.adminActionPill, { backgroundColor: '#1E293B', borderColor: '#334155' }]) as typeof baseStyles.adminActionPill,
+      adminActionText: StyleSheet.flatten([baseStyles.adminActionText, { color: '#E2E8F0' }]) as typeof baseStyles.adminActionText,
+      tabBar: StyleSheet.flatten([baseStyles.tabBar, { backgroundColor: '#111827', borderBottomColor: '#1F2937' }]) as typeof baseStyles.tabBar,
+      tabItemActive: StyleSheet.flatten([baseStyles.tabItemActive, { borderBottomColor: '#818CF8' }]) as typeof baseStyles.tabItemActive,
+      tabItemText: StyleSheet.flatten([baseStyles.tabItemText, { color: '#94A3B8' }]) as typeof baseStyles.tabItemText,
+      tabItemTextActive: StyleSheet.flatten([baseStyles.tabItemTextActive, { color: '#818CF8' }]) as typeof baseStyles.tabItemTextActive,
+      topicCountBadge: StyleSheet.flatten([baseStyles.topicCountBadge, { backgroundColor: '#1E293B' }]) as typeof baseStyles.topicCountBadge,
+      topicCountText: StyleSheet.flatten([baseStyles.topicCountText, { color: '#CBD5E1' }]) as typeof baseStyles.topicCountText,
+      body: StyleSheet.flatten([baseStyles.body, { backgroundColor: '#0B0F19' }]) as typeof baseStyles.body,
+      loadingText: StyleSheet.flatten([baseStyles.loadingText, { color: '#94A3B8' }]) as typeof baseStyles.loadingText,
+      subModalContent: StyleSheet.flatten([baseStyles.subModalContent, { backgroundColor: '#161F30' }]) as typeof baseStyles.subModalContent,
+      subModalHeader: StyleSheet.flatten([baseStyles.subModalHeader, { borderBottomColor: '#1F2937' }]) as typeof baseStyles.subModalHeader,
+      subModalTitle: StyleSheet.flatten([baseStyles.subModalTitle, { color: '#F8FAFC' }]) as typeof baseStyles.subModalTitle,
+      rosterSearchBox: StyleSheet.flatten([baseStyles.rosterSearchBox, { backgroundColor: '#1E293B', borderColor: '#334155' }]) as typeof baseStyles.rosterSearchBox,
+      rosterSearchInput: StyleSheet.flatten([baseStyles.rosterSearchInput, { color: '#F8FAFC' }]) as typeof baseStyles.rosterSearchInput,
+      rosterItem: StyleSheet.flatten([baseStyles.rosterItem, { borderBottomColor: '#1F2937' }]) as typeof baseStyles.rosterItem,
+      rosterOnlineDot: StyleSheet.flatten([baseStyles.rosterOnlineDot, { borderColor: '#161F30' }]) as typeof baseStyles.rosterOnlineDot,
+      rosterName: StyleSheet.flatten([baseStyles.rosterName, { color: '#F8FAFC' }]) as typeof baseStyles.rosterName,
+      rosterEmail: StyleSheet.flatten([baseStyles.rosterEmail, { color: '#94A3B8' }]) as typeof baseStyles.rosterEmail,
+      rosterProgram: StyleSheet.flatten([baseStyles.rosterProgram, { color: '#818CF8' }]) as typeof baseStyles.rosterProgram,
+      inputLabel: StyleSheet.flatten([baseStyles.inputLabel, { color: '#CBD5E1' }]) as typeof baseStyles.inputLabel,
+      formInput: StyleSheet.flatten([baseStyles.formInput, { backgroundColor: '#1E293B', borderColor: '#334155', color: '#F8FAFC' }]) as typeof baseStyles.formInput,
+    };
+  }, [isDarkMode]);
   // Navigation / Tab state
   const [activeTab, setActiveTab] = useState<'chat' | 'forum'>('chat');
   const [selectedConversation, setSelectedConversation] = useState<ChatConversation | null>(null);
@@ -457,7 +494,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 <Ionicons name="chatbubbles" size={18} color="#FFFFFF" />
               </View>
               <View>
-                <Text style={styles.appTitle}>Discussion & Chat</Text>
+                <Text style={styles.appTitle} numberOfLines={1}>Discussion & Chat</Text>
                 <View style={styles.roleRow}>
                   <View
                     style={[
@@ -846,7 +883,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   modalRoot: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
@@ -869,13 +906,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
     backgroundColor: '#FFFFFF',
   },
   headerLeft: {
+    flex: 1,
+    flexShrink: 1,
+    marginRight: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,

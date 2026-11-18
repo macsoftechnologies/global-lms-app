@@ -4,31 +4,34 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../src/context/ThemeContext';
 
 export default function FacultyRegisterScreen() {
+  const { isDarkMode } = useTheme();
+
   useEffect(() => {
-    // Automatically redirect to faculty login
     const timer = setTimeout(() => {
       router.replace('/faculty/login');
-    }, 1500);
+    }, 1800);
     return () => clearTimeout(timer);
   }, []);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: isDarkMode ? '#0B0F19' : '#F8FAFC' }]}>
+      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
       <View style={styles.container}>
-        <View style={styles.card}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="lock-closed" size={32} color="#7C3AED" />
+        <View style={[styles.card, { backgroundColor: isDarkMode ? '#161F30' : '#FFFFFF', borderColor: isDarkMode ? '#1F2937' : '#E2E8F0' }]}>
+          <View style={[styles.iconCircle, { backgroundColor: isDarkMode ? 'rgba(168, 85, 247, 0.2)' : '#FAF5FF' }]}>
+            <Ionicons name="lock-closed" size={32} color="#A855F7" />
           </View>
-          <Text style={styles.title}>Faculty Portal</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>Faculty Portal</Text>
+          <Text style={[styles.subtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
             Faculty and educator accounts are provisioned exclusively by the Academic Administration.
             Direct online application is disabled.
           </Text>
@@ -39,6 +42,7 @@ export default function FacultyRegisterScreen() {
             activeOpacity={0.85}
           >
             <Text style={styles.buttonText}>Go to Faculty Sign In</Text>
+            <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
           </TouchableOpacity>
         </View>
       </View>
@@ -49,7 +53,6 @@ export default function FacultyRegisterScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
   },
   container: {
     flex: 1,
@@ -57,51 +60,68 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 28,
+    borderRadius: 24,
+    padding: 30,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#F3E8FF',
+    width: 68,
+    height: 68,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   title: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0F172A',
+    letterSpacing: -0.3,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
-    color: '#64748B',
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
+    lineHeight: 22,
+    marginBottom: 26,
+    fontWeight: '400',
   },
   button: {
     backgroundColor: '#7C3AED',
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 24,
+    borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
     width: '100%',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#7C3AED',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.28,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   buttonText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
+    letterSpacing: 0.2,
   },
 });

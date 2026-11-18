@@ -1,6 +1,7 @@
 import { ApiClient } from './api';
 import { AuthStorage, AuthSession } from './authStorage';
 import { ENV } from '../config/env';
+import { LmsAuthService, buildUploadFormData } from './lmsAuthService';
 import {
   ApiResponse,
   StudentEnrollmentItem,
@@ -17,9 +18,16 @@ import {
   CoursesListResponse,
   CourseModule,
   CourseLesson,
+  LessonProgressEntry,
+  WatchTimeUpdateResponse,
+  CourseProgressData,
   LessonAiStudyData,
   LessonAiQuestion,
-  LessonAiConcept,
+  LessonAiBackstoryItem,
+  LessonAiFlashcardItem,
+  LessonAiLatestAttempt,
+  LessonAiQuizSubmitAnswerPayload,
+  LessonAiQuizSubmitResponse,
   CourseAccessVerification,
   GenerateInvoiceResponse,
   MyGradesResponse,
@@ -30,7 +38,222 @@ import {
   CyclicSemesterStatusResponse,
   VideoLessonTranscript,
   RequestCertificateResponse,
+  LiveSessionFilterParams,
+  NotificationsPaginatedResponse,
+  NotificationsPaginationMeta,
+  CourseAssignmentItem,
+  AssignmentSubmissionItem,
+  CourseExamItem,
+  ExamQuestionItem,
+  ExamStartAttemptResponse,
+  ExamAnswerDraftPayload,
+  ExamSubmitPayload,
+  VideoQuizItem,
+  VideoQuizSubmitPayload,
+  VideoQuizSubmitResponse,
+  VideoQuizMyAnswerItem,
 } from '../types';
+
+function unwrapArrayPayload(raw: unknown): unknown[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>;
+    if (Array.isArray(obj.data)) return obj.data;
+    if (obj.data && typeof obj.data === 'object') {
+      const nested = obj.data as Record<string, unknown>;
+      if (Array.isArray(nested.data)) return nested.data;
+      if (Array.isArray(nested.items)) return nested.items;
+    }
+    if (Array.isArray(obj.items)) return obj.items;
+    if (Array.isArray(obj.sessions)) return obj.sessions;
+    if (Array.isArray(obj.notifications)) return obj.notifications;
+  }
+  return [];
+}
+
+function extractAiErrorMessage(data: unknown, fallback?: string): string {
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+    if (typeof obj.message === 'string' && obj.message.trim()) return obj.message.trim();
+    if (typeof obj.error === 'string' && obj.error.trim()) return obj.error.trim();
+    if (Array.isArray(obj.message) && obj.message.length > 0) {
+      return obj.message.map(String).join(', ');
+    }
+  }
+  return fallback || 'Failed to load lesson AI study data.';
+}
+
+function normalizeLatestAiAttempt(raw: unknown): LessonAiLatestAttempt | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  const score = typeof obj.score === 'number' ? obj.score : Number(obj.score);
+  const totalQuestions =
+    typeof obj.totalQuestions === 'number'
+      ? obj.totalQuestions
+      : typeof obj.total_questions === 'number'
+        ? obj.total_questions
+        : Number(obj.totalQuestions ?? obj.total_questions);
+
+  if (Number.isNaN(score) && Number.isNaN(totalQuestions)) {
+    return null;
+  }
+
+  return {
+    id: obj.id ? String(obj.id) : obj._id ? String(obj._id) : undefined,
+    score: Number.isNaN(score) ? 0 : score,
+    totalQuestions: Number.isNaN(totalQuestions) ? 0 : totalQuestions,
+    percentage: typeof obj.percentage === 'number' ? obj.percentage : undefined,
+    completedAt:
+      typeof obj.completedAt === 'string'
+        ? obj.completedAt
+        : typeof obj.completed_at === 'string'
+          ? obj.completed_at
+          : typeof obj.createdAt === 'string'
+            ? obj.createdAt
+            : undefined,
+    attemptNumber: typeof obj.attemptNumber === 'number' ? obj.attemptNumber : undefined,
+    passed: typeof obj.passed === 'boolean' ? obj.passed : undefined,
+  };
+}
+
+function normalizeLiveSession(rawInput: unknown): LiveSessionItem {
+  const raw = (rawInput && typeof rawInput === 'object' ? rawInput : {}) as Record<string, unknown>;
+  const id = String(raw.id || raw._id || '');
+
+  const courseObj =
+    raw.course && typeof raw.course === 'object'
+      ? (raw.course as Record<string, unknown>)
+      : raw.courseId && typeof raw.courseId === 'object'
+        ? (raw.courseId as Record<string, unknown>)
+        : undefined;
+
+  const batchObj =
+    raw.batch && typeof raw.batch === 'object'
+      ? (raw.batch as Record<string, unknown>)
+      : raw.batchId && typeof raw.batchId === 'object'
+        ? (raw.batchId as Record<string, unknown>)
+        : undefined;
+
+  const facultyObj =
+    (raw.faculty && typeof raw.faculty === 'object' ? (raw.faculty as Record<string, unknown>) : null) ||
+    (raw.instructor && typeof raw.instructor === 'object' ? (raw.instructor as Record<string, unknown>) : null) ||
+    (raw.facultyId && typeof raw.facultyId === 'object' ? (raw.facultyId as Record<string, unknown>) : null) ||
+    (raw.host && typeof raw.host === 'object' ? (raw.host as Record<string, unknown>) : null) ||
+    undefined;
+
+  const courseId =
+    typeof raw.courseId === 'string' && raw.courseId.trim()
+      ? raw.courseId.trim()
+      : courseObj && (courseObj.id || courseObj._id)
+        ? String(courseObj.id || courseObj._id)
+        : undefined;
+
+  const batchId =
+    typeof raw.batchId === 'string' && raw.batchId.trim()
+      ? raw.batchId.trim()
+      : batchObj && (batchObj.id || batchObj._id)
+        ? String(batchObj.id || batchObj._id)
+        : undefined;
+
+  const facultyId =
+    typeof raw.facultyId === 'string' && raw.facultyId.trim()
+      ? raw.facultyId.trim()
+      : facultyObj && (facultyObj.id || facultyObj._id)
+        ? String(facultyObj.id || facultyObj._id)
+        : undefined;
+
+  const courseTitle =
+    (typeof raw.courseTitle === 'string' && raw.courseTitle.trim()) ||
+    (typeof courseObj?.title === 'string' && courseObj.title.trim()) ||
+    (typeof courseObj?.name === 'string' && courseObj.name.trim()) ||
+    undefined;
+
+  const batchName =
+    (typeof raw.batchName === 'string' && raw.batchName.trim()) ||
+    (typeof batchObj?.name === 'string' && batchObj.name.trim()) ||
+    undefined;
+
+  const instructorName =
+    (typeof raw.instructorName === 'string' && raw.instructorName.trim()) ||
+    (typeof raw.facultyName === 'string' && raw.facultyName.trim()) ||
+    (typeof raw.hostName === 'string' && raw.hostName.trim()) ||
+    (typeof facultyObj?.fullName === 'string' && facultyObj.fullName.trim()) ||
+    (typeof facultyObj?.name === 'string' && facultyObj.name.trim()) ||
+    undefined;
+
+  const rawUrlCandidate =
+    raw.meetingUrl || raw.joinUrl || raw.meetingLink || raw.zoomJoinUrl || raw.zoomUrl;
+  const trimmedUrl = typeof rawUrlCandidate === 'string' ? rawUrlCandidate.trim() : '';
+  const resolvedMeetingUrl = trimmedUrl
+    ? /^https?:\/\//i.test(trimmedUrl)
+      ? trimmedUrl
+      : `https://${trimmedUrl}`
+    : undefined;
+
+  const rawStatus = typeof raw.status === 'string' && raw.status.trim() ? raw.status.trim().toUpperCase() : undefined;
+
+  return {
+    ...(raw as unknown as LiveSessionItem),
+    id,
+    _id: typeof raw._id === 'string' ? raw._id : undefined,
+    title: typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : '',
+    courseId,
+    courseTitle,
+    course: courseObj as LiveSessionItem['course'],
+    batchId,
+    batchName,
+    batch: batchObj as LiveSessionItem['batch'],
+    facultyId,
+    instructorName,
+    faculty: facultyObj as LiveSessionItem['faculty'],
+    instructor: (raw.instructor && typeof raw.instructor === 'object' ? raw.instructor : undefined) as LiveSessionItem['instructor'],
+    sessionNumber: typeof raw.sessionNumber === 'number' ? raw.sessionNumber : undefined,
+    scheduledDate: typeof raw.scheduledDate === 'string' ? raw.scheduledDate : undefined,
+    scheduledTime: typeof raw.scheduledTime === 'string' ? raw.scheduledTime : undefined,
+    startTime: typeof raw.startTime === 'string' ? raw.startTime : undefined,
+    endTime: typeof raw.endTime === 'string' ? raw.endTime : undefined,
+    meetingUrl: resolvedMeetingUrl,
+    agenda: typeof raw.agenda === 'string' ? raw.agenda : typeof raw.description === 'string' ? raw.description : undefined,
+    hasAttended: typeof raw.hasAttended === 'boolean' ? raw.hasAttended : undefined,
+    attendees: Array.isArray(raw.attendees) ? (raw.attendees as string[]) : undefined,
+    canJoin: typeof raw.canJoin === 'boolean' ? raw.canJoin : undefined,
+    status: rawStatus,
+  };
+}
+
+function normalizeNotification(rawInput: unknown): NotificationItem {
+  const raw = (rawInput && typeof rawInput === 'object' ? rawInput : {}) as Record<string, unknown>;
+  const id = String(raw.id || raw._id || '');
+  const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : '';
+  const message =
+    (typeof raw.message === 'string' && raw.message.trim()) ||
+    (typeof raw.body === 'string' && raw.body.trim()) ||
+    (typeof raw.content === 'string' && raw.content.trim()) ||
+    '';
+
+  const isRead =
+    typeof raw.isRead === 'boolean'
+      ? raw.isRead
+      : typeof raw.read === 'boolean'
+        ? raw.read
+        : Boolean(raw.readAt);
+
+  return {
+    ...(raw as unknown as NotificationItem),
+    id,
+    _id: typeof raw._id === 'string' ? raw._id : undefined,
+    title,
+    message,
+    createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : typeof raw.updatedAt === 'string' ? raw.updatedAt : undefined,
+    readAt: typeof raw.readAt === 'string' ? raw.readAt : undefined,
+    isRead,
+    type: typeof raw.type === 'string' && raw.type.trim() ? raw.type.trim() : undefined,
+    link: typeof raw.link === 'string' ? raw.link : typeof raw.actionUrl === 'string' ? raw.actionUrl : undefined,
+    actionUrl: typeof raw.actionUrl === 'string' ? raw.actionUrl : undefined,
+    metadata: raw.metadata && typeof raw.metadata === 'object' ? (raw.metadata as Record<string, unknown>) : undefined,
+  };
+}
 
 /**
  * DashboardService
@@ -96,31 +319,54 @@ export const DashboardService = {
   ): Promise<ApiResponse<StudentEnrollmentItem[]>> {
     const id = studentId || 'me';
     let endpoint = `students/${encodeURIComponent(id)}/enrollments`;
-    let response = await ApiClient.get<
-      StudentEnrollmentItem[] | { data: StudentEnrollmentItem[] }
-    >(endpoint);
+    let response = await ApiClient.get<unknown>(endpoint);
 
     // If 'me' failed or vice-versa, attempt fallback with authenticated user ID
     if (!response.success && id === 'me') {
       const user = await AuthStorage.getUser();
       if (user?.id) {
-        response = await ApiClient.get<
-          StudentEnrollmentItem[] | { data: StudentEnrollmentItem[] }
-        >(`students/${encodeURIComponent(user.id)}/enrollments`);
+        response = await ApiClient.get<unknown>(`students/${encodeURIComponent(user.id)}/enrollments`);
       }
     } else if (!response.success && id !== 'me') {
-      response = await ApiClient.get<
-        StudentEnrollmentItem[] | { data: StudentEnrollmentItem[] }
-      >(`students/me/enrollments`);
+      response = await ApiClient.get<unknown>(`students/me/enrollments`);
     }
 
     if (response.success && response.data) {
       const raw = response.data;
-      const list = Array.isArray(raw)
-        ? raw
-        : Array.isArray((raw as { data: StudentEnrollmentItem[] }).data)
-        ? (raw as { data: StudentEnrollmentItem[] }).data
-        : [];
+      const rawList = unwrapArrayPayload(raw);
+      const list: StudentEnrollmentItem[] = (rawList as any[]).map((e) => {
+        if (!e || typeof e !== 'object') return e;
+        const courseObj =
+          e.course && typeof e.course === 'object'
+            ? e.course
+            : e.courseId && typeof e.courseId === 'object'
+            ? e.courseId
+            : undefined;
+
+        const cleanCourseId =
+          typeof e.courseId === 'string' && e.courseId.trim()
+            ? e.courseId.trim()
+            : courseObj && (courseObj.id || courseObj._id)
+            ? String(courseObj.id || courseObj._id)
+            : typeof e.id === 'string'
+            ? e.id
+            : '';
+
+        const progress =
+          typeof e.progressPercentage === 'number'
+            ? e.progressPercentage
+            : typeof e.progress === 'number'
+            ? e.progress
+            : Number(e.progressPercentage ?? e.progress) || 0;
+
+        return {
+          ...e,
+          id: String(e.id || e._id || cleanCourseId),
+          courseId: cleanCourseId,
+          course: courseObj ? { ...courseObj, id: String(courseObj.id || courseObj._id || cleanCourseId) } : e.course,
+          progressPercentage: Math.min(100, Math.max(0, progress)),
+        };
+      });
 
       return {
         status: response.status,
@@ -156,11 +402,12 @@ export const DashboardService = {
     let totalProgress = 0;
 
     for (const item of enrollments) {
-      const p = item.progressPercentage || 0;
+      const p = typeof item.progressPercentage === 'number' ? item.progressPercentage : Number(item.progressPercentage) || 0;
+      const status = (item.status || '').toUpperCase();
       totalProgress += p;
-      if (p >= 100) {
+      if (p >= 100 || status === 'COMPLETED') {
         completed += 1;
-      } else if (p > 0) {
+      } else {
         inProgress += 1;
       }
     }
@@ -207,8 +454,8 @@ export const DashboardService = {
       const list = Array.isArray(raw)
         ? raw
         : Array.isArray((raw as { data: StudentProgramEnrollment[] }).data)
-        ? (raw as { data: StudentProgramEnrollment[] }).data
-        : [];
+          ? (raw as { data: StudentProgramEnrollment[] }).data
+          : [];
 
       return {
         status: response.status,
@@ -230,18 +477,10 @@ export const DashboardService = {
    * Matches Postman: GET /live-sessions/student/upcoming
    */
   async getUpcomingLiveSessions(): Promise<ApiResponse<LiveSessionItem[]>> {
-    const response = await ApiClient.get<
-      LiveSessionItem[] | { data: LiveSessionItem[] }
-    >('live-sessions/student/upcoming');
+    const response = await ApiClient.get<unknown>('live-sessions/student/upcoming');
 
-    if (response.success && response.data) {
-      const raw = response.data;
-      const list = Array.isArray(raw)
-        ? raw
-        : Array.isArray((raw as { data: LiveSessionItem[] }).data)
-        ? (raw as { data: LiveSessionItem[] }).data
-        : [];
-
+    if (response.success && response.data !== undefined) {
+      const list = unwrapArrayPayload(response.data).map(normalizeLiveSession);
       return {
         status: response.status,
         success: true,
@@ -258,66 +497,190 @@ export const DashboardService = {
   },
 
   /**
-   * 6. Get Unread Notifications Count
+   * 5b. Get Live Sessions List (with optional courseId / batchId filters)
+   * Matches Postman: GET /live-sessions?courseId=...&batchId=...
+   */
+  async getLiveSessions(filters?: LiveSessionFilterParams): Promise<ApiResponse<LiveSessionItem[]>> {
+    const params: string[] = [];
+    if (filters?.courseId && filters.courseId.trim()) {
+      params.push(`courseId=${encodeURIComponent(filters.courseId.trim())}`);
+    }
+    if (filters?.batchId && filters.batchId.trim()) {
+      params.push(`batchId=${encodeURIComponent(filters.batchId.trim())}`);
+    }
+    const query = params.length > 0 ? `?${params.join('&')}` : '';
+    const response = await ApiClient.get<unknown>(`live-sessions${query}`);
+
+    if (response.success && response.data !== undefined) {
+      const list = unwrapArrayPayload(response.data).map(normalizeLiveSession);
+      return {
+        status: response.status,
+        success: true,
+        data: list,
+      };
+    }
+
+    return {
+      status: response.status,
+      success: response.success,
+      data: [],
+      error: response.error,
+    };
+  },
+
+  /**
+   * 6. Get Unread Notifications Count (Structured Result)
+   * Matches Postman: GET /notifications/unread-count
+   */
+  async getUnreadNotificationCountResult(): Promise<ApiResponse<number>> {
+    const response = await ApiClient.get<unknown>('notifications/unread-count');
+
+    if (response.success && response.data !== undefined) {
+      const raw = response.data as Record<string, unknown>;
+      const nested = raw?.data && typeof raw.data === 'object' ? (raw.data as Record<string, unknown>) : null;
+      const countCandidate =
+        raw?.count ??
+        raw?.unreadCount ??
+        nested?.count ??
+        nested?.unreadCount ??
+        (typeof response.data === 'number' ? response.data : 0);
+
+      const count = typeof countCandidate === 'number' ? countCandidate : Number(countCandidate) || 0;
+      return {
+        status: response.status,
+        success: true,
+        data: Math.max(0, count),
+      };
+    }
+
+    return {
+      status: response.status,
+      success: false,
+      data: 0,
+      error: response.error,
+    };
+  },
+
+  /**
+   * 6b. Get Unread Notifications Count (numeric helper for existing callers)
    * Matches Postman: GET /notifications/unread-count
    */
   async getUnreadNotificationCount(): Promise<number> {
     try {
-      const response = await ApiClient.get<{ count?: number } | { data?: { count?: number } }>(
-        'notifications/unread-count'
-      );
-
-      if (response.success && response.data) {
-        const raw = response.data;
-        if ('count' in raw && typeof (raw as { count: number }).count === 'number') {
-          return (raw as { count: number }).count;
-        }
-        if (
-          'data' in raw &&
-          (raw as { data?: { count?: number } }).data?.count !== undefined
-        ) {
-          return (raw as { data: { count: number } }).data.count || 0;
-        }
-      }
-      return 0;
+      const res = await this.getUnreadNotificationCountResult();
+      return res.success && typeof res.data === 'number' ? res.data : 0;
     } catch {
       return 0;
     }
   },
 
   /**
-   * 7. Get Notifications List
+   * 7. Get Notifications List (Paginated Feed + Meta)
    * Matches Postman: GET /notifications?page=1&limit=20
    */
-  async getNotifications(
+  async getNotificationsPaginated(
     page: number = 1,
     limit: number = 20
-  ): Promise<ApiResponse<NotificationItem[]>> {
-    const response = await ApiClient.get<
-      NotificationItem[] | { data: NotificationItem[] }
-    >(`notifications?page=${page}&limit=${limit}`);
+  ): Promise<ApiResponse<NotificationsPaginatedResponse>> {
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.max(1, limit);
+    const response = await ApiClient.get<unknown>(`notifications?page=${safePage}&limit=${safeLimit}`);
 
-    if (response.success && response.data) {
-      const raw = response.data;
-      const list = Array.isArray(raw)
-        ? raw
-        : Array.isArray((raw as { data: NotificationItem[] }).data)
-        ? (raw as { data: NotificationItem[] }).data
-        : [];
+    if (response.success && response.data !== undefined) {
+      const items = unwrapArrayPayload(response.data).map(normalizeNotification);
+      const rawObj =
+        response.data && typeof response.data === 'object' && !Array.isArray(response.data)
+          ? (response.data as Record<string, unknown>)
+          : {};
+      const dataObj =
+        rawObj.data && typeof rawObj.data === 'object' && !Array.isArray(rawObj.data)
+          ? (rawObj.data as Record<string, unknown>)
+          : {};
+      const metaRaw =
+        (rawObj.meta as Record<string, unknown> | undefined) ||
+        (rawObj.pagination as Record<string, unknown> | undefined) ||
+        (dataObj.meta as Record<string, unknown> | undefined) ||
+        (dataObj.pagination as Record<string, unknown> | undefined) ||
+        null;
+
+      const parsedPage = Number(metaRaw?.page ?? metaRaw?.currentPage ?? safePage) || safePage;
+      const parsedLimit = Number(metaRaw?.limit ?? metaRaw?.perPage ?? safeLimit) || safeLimit;
+      const parsedTotalItems = Number(
+        metaRaw?.totalItems ?? metaRaw?.total ?? metaRaw?.totalCount ?? items.length
+      );
+      const parsedTotalPages =
+        Number(metaRaw?.totalPages ?? metaRaw?.pages) ||
+        (parsedTotalItems > 0 ? Math.max(1, Math.ceil(parsedTotalItems / parsedLimit)) : 1);
+      const hasMore =
+        typeof metaRaw?.hasMore === 'boolean'
+          ? metaRaw.hasMore
+          : metaRaw !== null
+            ? parsedPage < parsedTotalPages
+            : items.length >= safeLimit;
+
+      const meta: NotificationsPaginationMeta = {
+        page: parsedPage,
+        limit: parsedLimit,
+        totalItems: Number.isFinite(parsedTotalItems) ? parsedTotalItems : items.length,
+        totalPages: Number.isFinite(parsedTotalPages) ? Math.max(1, parsedTotalPages) : 1,
+        hasMore,
+      };
 
       return {
         status: response.status,
         success: true,
-        data: list,
+        data: { items, meta },
       };
     }
 
     return {
       status: response.status,
       success: response.success,
-      data: [],
+      data: {
+        items: [],
+        meta: { page: safePage, limit: safeLimit, totalItems: 0, totalPages: 1, hasMore: false },
+      },
       error: response.error,
     };
+  },
+
+  /**
+   * 7b. Get Notifications List (array helper for backwards compatibility)
+   * Matches Postman: GET /notifications?page=1&limit=20
+   */
+  async getNotifications(
+    page: number = 1,
+    limit: number = 20
+  ): Promise<ApiResponse<NotificationItem[]>> {
+    const res = await this.getNotificationsPaginated(page, limit);
+    return {
+      status: res.status,
+      success: res.success,
+      data: res.data?.items || [],
+      error: res.error,
+    };
+  },
+
+  /**
+   * 7c. Mark Single Notification As Read
+   * Matches Postman: PATCH /notifications/:notificationId/read
+   */
+  async markNotificationAsRead(notificationId: string): Promise<ApiResponse<unknown>> {
+    if (!notificationId || !notificationId.trim()) {
+      return { status: 400, success: false, error: 'Missing notification ID.' };
+    }
+    return ApiClient.patch<unknown>(
+      `notifications/${encodeURIComponent(notificationId.trim())}/read`,
+      {}
+    );
+  },
+
+  /**
+   * 7d. Mark All Notifications As Read
+   * Matches Postman: POST /notifications/mark-all-read
+   */
+  async markAllNotificationsAsRead(): Promise<ApiResponse<unknown>> {
+    return ApiClient.post<unknown>('notifications/mark-all-read', {});
   },
 
   /**
@@ -392,8 +755,8 @@ export const DashboardService = {
       const list = Array.isArray(raw)
         ? raw
         : Array.isArray((raw as { data: ExamAttemptItem[] }).data)
-        ? (raw as { data: ExamAttemptItem[] }).data
-        : [];
+          ? (raw as { data: ExamAttemptItem[] }).data
+          : [];
       return {
         status: response.status,
         success: true,
@@ -419,8 +782,8 @@ export const DashboardService = {
       const list = Array.isArray(raw)
         ? raw
         : Array.isArray((raw as { data: VideoQuizResultItem[] }).data)
-        ? (raw as { data: VideoQuizResultItem[] }).data
-        : [];
+          ? (raw as { data: VideoQuizResultItem[] }).data
+          : [];
       return {
         status: response.status,
         success: true,
@@ -510,6 +873,261 @@ export const DashboardService = {
       };
     }
     return response as ApiResponse<AttemptReviewResponse>;
+  },
+
+  /**
+   * 8h-1. List Course Assignments
+   * Matches Postman: GET /courses/:courseId/assignments
+   */
+  async getCourseAssignments(courseId: string): Promise<ApiResponse<CourseAssignmentItem[]>> {
+    const response = await ApiClient.get<any>(`courses/${encodeURIComponent(courseId)}/assignments`);
+    if (response.success && response.data) {
+      const raw = response.data;
+      const list = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw.data)
+          ? raw.data
+          : Array.isArray(raw.assignments)
+            ? raw.assignments
+            : [];
+      return {
+        status: response.status,
+        success: true,
+        data: list,
+      };
+    }
+    return {
+      status: response.status,
+      success: false,
+      data: [],
+      error: response.error || 'Failed to fetch assignments',
+    };
+  },
+
+  /**
+   * 8h-2. Get Assignment Submissions
+   * Matches Postman: GET /courses/:courseId/assignments/:assignmentId/submissions
+   */
+  async getAssignmentSubmissions(
+    courseId: string,
+    assignmentId: string
+  ): Promise<ApiResponse<AssignmentSubmissionItem[]>> {
+    const response = await ApiClient.get<any>(
+      `courses/${encodeURIComponent(courseId)}/assignments/${encodeURIComponent(assignmentId)}/submissions`
+    );
+    if (response.success && response.data) {
+      const raw = response.data;
+      const list = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw.data)
+          ? raw.data
+          : Array.isArray(raw.submissions)
+            ? raw.submissions
+            : [];
+      return {
+        status: response.status,
+        success: true,
+        data: list,
+      };
+    }
+    return {
+      status: response.status,
+      success: false,
+      data: [],
+      error: response.error,
+    };
+  },
+
+  /**
+   * 8h-3. Submit Assignment File
+   * Matches Postman: POST /courses/:courseId/assignments/:assignmentId/submit
+   * Multipart/form-data with field name 'file'
+   */
+  async submitAssignmentFile(
+    courseId: string,
+    assignmentId: string,
+    file: { uri: string; name: string; type?: string; size?: number }
+  ): Promise<ApiResponse<any>> {
+    try {
+      const formData = await buildUploadFormData({
+        uri: file.uri,
+        name: file.name,
+        mimeType: file.type,
+        fieldName: 'file',
+      });
+      const endpoint = `courses/${encodeURIComponent(courseId)}/assignments/${encodeURIComponent(assignmentId)}/submit`;
+      const response = await ApiClient.upload<any>(endpoint, formData);
+      return response;
+    } catch (err: unknown) {
+      return {
+        status: 0,
+        success: false,
+        error: err instanceof Error ? err.message : 'Upload failed',
+      };
+    }
+  },
+
+  /**
+   * 8h-4. List Exams for Course
+   * Matches Postman: GET /courses/:courseId/exams
+   */
+  async getCourseExams(courseId: string): Promise<ApiResponse<CourseExamItem[]>> {
+    const response = await ApiClient.get<any>(`courses/${encodeURIComponent(courseId)}/exams`);
+    if (response.success && response.data) {
+      const raw = response.data;
+      const list = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw.data)
+          ? raw.data
+          : Array.isArray(raw.exams)
+            ? raw.exams
+            : [];
+      return {
+        status: response.status,
+        success: true,
+        data: list,
+      };
+    }
+    return {
+      status: response.status,
+      success: false,
+      data: [],
+      error: response.error || 'Failed to fetch course exams',
+    };
+  },
+
+  /**
+   * 8h-5. Get Exam Details & Guidelines
+   * Matches Postman: GET /exams/:examId
+   */
+  async getExamDetails(examId: string): Promise<ApiResponse<CourseExamItem>> {
+    const response = await ApiClient.get<any>(`exams/${encodeURIComponent(examId)}`);
+    if (response.success && response.data) {
+      const raw = response.data;
+      const item = raw && typeof raw === 'object' && 'data' in raw && raw.data ? raw.data : raw;
+      return {
+        status: response.status,
+        success: true,
+        data: item,
+      };
+    }
+    return {
+      status: response.status,
+      success: false,
+      data: null as any,
+      error: response.error || 'Failed to fetch exam details',
+    };
+  },
+
+  /**
+   * 8h-6. Start Exam Attempt
+   * Matches Postman: POST /exams/:examId/start
+   */
+  async startExamAttempt(examId: string): Promise<ApiResponse<ExamStartAttemptResponse>> {
+    const response = await ApiClient.post<any>(`exams/${encodeURIComponent(examId)}/start`, {});
+    if (response.success && response.data) {
+      const raw = response.data;
+      const attempt = raw && typeof raw === 'object' && 'data' in raw && raw.data ? raw.data : raw;
+      return {
+        status: response.status,
+        success: true,
+        data: attempt,
+      };
+    }
+    return {
+      status: response.status,
+      success: false,
+      data: null as any,
+      error: response.error || 'Failed to start exam attempt',
+    };
+  },
+
+  /**
+   * 8h-7. Get Exam Questions
+   * Matches Postman: GET /exams/:examId/questions
+   */
+  async getExamQuestions(examId: string): Promise<ApiResponse<ExamQuestionItem[]>> {
+    const response = await ApiClient.get<any>(`exams/${encodeURIComponent(examId)}/questions`);
+    if (response.success && response.data) {
+      const raw = response.data;
+      const list = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw.data)
+          ? raw.data
+          : Array.isArray(raw.questions)
+            ? raw.questions
+            : [];
+      return {
+        status: response.status,
+        success: true,
+        data: list,
+      };
+    }
+    return {
+      status: response.status,
+      success: false,
+      data: [],
+      error: response.error || 'Failed to fetch exam questions',
+    };
+  },
+
+  /**
+   * 8h-8. Save Draft Answer (Autosave)
+   * Matches Postman: PATCH /exams/:examId/answers
+   */
+  async saveExamDraftAnswer(
+    examId: string,
+    payload: ExamAnswerDraftPayload
+  ): Promise<ApiResponse<any>> {
+    const response = await ApiClient.patch<any>(
+      `exams/${encodeURIComponent(examId)}/answers`,
+      payload
+    );
+    return response;
+  },
+
+  /**
+   * 8h-9. Submit Exam Attempt
+   * Matches Postman: POST /exams/:examId/submit
+   */
+  async submitExamAttempt(
+    examId: string,
+    payload: ExamSubmitPayload
+  ): Promise<ApiResponse<any>> {
+    const response = await ApiClient.post<any>(
+      `exams/${encodeURIComponent(examId)}/submit`,
+      payload
+    );
+    return response;
+  },
+
+  /**
+   * 8h-10. Get My Attempt History for Exam
+   * Matches Postman: GET /exams/:examId/attempts
+   */
+  async getExamAttempts(examId: string): Promise<ApiResponse<ExamAttemptItem[]>> {
+    const response = await ApiClient.get<any>(`exams/${encodeURIComponent(examId)}/attempts`);
+    if (response.success && response.data) {
+      const raw = response.data;
+      const list = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw.data)
+          ? raw.data
+          : Array.isArray(raw.attempts)
+            ? raw.attempts
+            : [];
+      return {
+        status: response.status,
+        success: true,
+        data: list,
+      };
+    }
+    return {
+      status: response.status,
+      success: false,
+      data: [],
+      error: response.error || 'Failed to fetch exam attempts',
+    };
   },
 
   /**
@@ -680,12 +1298,12 @@ export const DashboardService = {
       const list: any[] = Array.isArray(raw)
         ? raw
         : Array.isArray(raw.data)
-        ? raw.data
-        : Array.isArray(raw.certificates)
-        ? raw.certificates
-        : Array.isArray(raw.items)
-        ? raw.items
-        : [];
+          ? raw.data
+          : Array.isArray(raw.certificates)
+            ? raw.certificates
+            : Array.isArray(raw.items)
+              ? raw.items
+              : [];
 
       const normalizedList = list.map((item) => this.normalizeCertificate(item));
 
@@ -826,10 +1444,10 @@ export const DashboardService = {
       const list: any[] = Array.isArray(raw)
         ? raw
         : Array.isArray(raw.data)
-        ? raw.data
-        : Array.isArray(raw.items)
-        ? raw.items
-        : [];
+          ? raw.data
+          : Array.isArray(raw.items)
+            ? raw.items
+            : [];
 
       const rawMeta = raw.meta || raw.pagination || {};
       const totalCount = Number(rawMeta.totalItems ?? (rawMeta.total || (raw.total || list.length)));
@@ -967,33 +1585,14 @@ export const DashboardService = {
    */
   async getPublicPrograms(
     limit: number = 100,
-    slug: string = 'org1'
+    slug?: string,
+    options?: { page?: number; forceRefresh?: boolean }
   ): Promise<ApiResponse<ProgramOption[]>> {
-    const response = await ApiClient.get<
-      ProgramOption[] | { data: ProgramOption[] }
-    >(`programs/public?limit=${limit}&slug=${encodeURIComponent(slug)}`);
-
-    if (response.success && response.data) {
-      const raw = response.data;
-      const list = Array.isArray(raw)
-        ? raw
-        : Array.isArray((raw as { data: ProgramOption[] }).data)
-        ? (raw as { data: ProgramOption[] }).data
-        : [];
-
-      return {
-        status: response.status,
-        success: true,
-        data: list,
-      };
-    }
-
-    return {
-      status: response.status,
-      success: response.success,
-      data: [],
-      error: response.error,
-    };
+    return LmsAuthService.getAvailablePrograms(slug, {
+      limit,
+      page: options?.page,
+      forceRefresh: options?.forceRefresh,
+    });
   },
 
   /**
@@ -1011,8 +1610,8 @@ export const DashboardService = {
         const list = Array.isArray(raw)
           ? raw
           : Array.isArray((raw as { data: ProgramOption[] }).data)
-          ? (raw as { data: ProgramOption[] }).data
-          : [];
+            ? (raw as { data: ProgramOption[] }).data
+            : [];
 
         if (list.length > 0) {
           return {
@@ -1026,8 +1625,8 @@ export const DashboardService = {
       // Fallback to public endpoint
     }
 
-    // Graceful fallback to verified public programs endpoint (Item 14.2)
-    return this.getPublicPrograms(100, 'org1');
+    // Graceful fallback to verified public programs endpoint using active org slug
+    return this.getPublicPrograms(100);
   },
 
   /**
@@ -1056,8 +1655,8 @@ export const DashboardService = {
       // Fallback
     }
 
-    // Search in public programs catalog
-    const allRes = await this.getPublicPrograms(100, 'org1');
+    // Search in public programs catalog for active organization
+    const allRes = await this.getPublicPrograms(100);
     if (allRes.success && allRes.data) {
       const match = allRes.data.find(
         (p) => p.id === programId || (p as any)._id === programId
@@ -1528,72 +2127,215 @@ export const DashboardService = {
   },
 
   /**
-   * 16. Get Lesson AI Study Data (Flashcards & Quiz & Briefing)
+   * 16. Get Lesson AI Study Data
    * Matches Postman: GET /courses/:courseId/content/lessons/:lessonId/ai-data
    */
   async getLessonAiData(
     courseId: string,
     lessonId: string
   ): Promise<ApiResponse<LessonAiStudyData>> {
+    if (!courseId || !lessonId) {
+      return {
+        status: 400,
+        success: false,
+        error: 'Course ID and Lesson ID are required.',
+      };
+    }
+
     const endpoint = `courses/${encodeURIComponent(courseId)}/content/lessons/${encodeURIComponent(lessonId)}/ai-data`;
     const response = await ApiClient.get<any>(endpoint);
 
-    if (response.success && response.data) {
-      const raw = response.data;
-      const rawAny = (raw && typeof raw === 'object' && 'data' in raw && raw.data)
-        ? raw.data
-        : raw;
-
-      const summary = rawAny.summary || rawAny.executiveBriefing || rawAny.briefing || '';
-      const executiveBriefing = rawAny.executiveBriefing || rawAny.briefing || rawAny.summary || '';
-      const keyPoints = Array.isArray(rawAny.keyPoints)
-        ? rawAny.keyPoints
-        : Array.isArray(rawAny.key_points)
-        ? rawAny.key_points
-        : Array.isArray(rawAny.points)
-        ? rawAny.points
-        : [];
-
-      const rawQuiz = Array.isArray(rawAny.quiz) ? rawAny.quiz : Array.isArray(rawAny.questions) ? rawAny.questions : [];
-      const quiz: LessonAiQuestion[] = rawQuiz.map((q: any, idx: number) => ({
-        id: String(q.id || q._id || `q_${idx}`),
-        question: q.question || q.title || '',
-        options: Array.isArray(q.options) ? q.options.map(String) : [],
-        correctOptionIndex: typeof q.correctOptionIndex === 'number'
-          ? q.correctOptionIndex
-          : typeof q.correct_index === 'number'
-          ? q.correct_index
-          : typeof q.correctAnswerIndex === 'number'
-          ? q.correctAnswerIndex
-          : 0,
-        explanation: q.explanation || q.theological_explanation || q.reason || '',
-      }));
-
-      const rawConcepts = Array.isArray(rawAny.concepts) ? rawAny.concepts : [];
-      const concepts: LessonAiConcept[] = rawConcepts.map((c: any) => ({
-        title: c.title || c.topic || c.name || '',
-        description: c.description || c.explanation || c.content || '',
-        historicalContext: c.historicalContext || c.historical_context || c.context,
-        category: c.category || c.badge,
-      }));
-
-      const takeaways = Array.isArray(rawAny.takeaways)
-        ? rawAny.takeaways
-        : Array.isArray(rawAny.revision)
-        ? rawAny.revision
-        : Array.isArray(rawAny.checklist)
-        ? rawAny.checklist
-        : [];
-
-      const normalized: LessonAiStudyData = {
-        summary,
-        executiveBriefing,
-        keyPoints,
-        quiz,
-        concepts,
-        takeaways,
-        flashcards: Array.isArray(rawAny.flashcards) ? rawAny.flashcards : [],
+    if (!response.success) {
+      return {
+        status: response.status,
+        success: false,
+        error: extractAiErrorMessage(response.data, response.error),
       };
+    }
+
+    const raw = response.data;
+    if (raw && typeof raw === 'object' && (raw as Record<string, unknown>).success === false) {
+      return {
+        status: response.status,
+        success: false,
+        error: extractAiErrorMessage(raw, response.error),
+      };
+    }
+
+    const root = raw && typeof raw === 'object' ? (raw as Record<string, any>) : {};
+    let envelope = root;
+    if (root.data && typeof root.data === 'object') {
+      envelope = root.data;
+    }
+
+    // Extract inner content from possible envelope shapes:
+    // Shape 1: { found: true, hasAiData: true, data: { summary, quiz_pool, ... } }
+    // Shape 2: { data: { found: true, hasAiData: true, data: { summary, ... } } }
+    // Shape 3: { summary, quiz_pool, ... }
+    const inner =
+      envelope.data && typeof envelope.data === 'object'
+        ? (envelope.data as Record<string, any>)
+        : envelope;
+
+    const summary = typeof inner.summary === 'string' ? inner.summary : '';
+
+    const rawQuizPool = Array.isArray(inner.quiz_pool) ? inner.quiz_pool : [];
+    const quiz_pool: LessonAiQuestion[] = rawQuizPool.map((q: any, idx: number) => {
+      const correctIdx =
+        typeof q?.correct_index === 'number'
+          ? q.correct_index
+          : typeof q?.correctOptionIndex === 'number'
+            ? q.correctOptionIndex
+            : undefined;
+      const theologicalExplanation =
+        typeof q?.theological_explanation === 'string'
+          ? q.theological_explanation
+          : typeof q?.explanation === 'string'
+            ? q.explanation
+            : '';
+      return {
+        id: String(q?.id || q?._id || `q_${idx}`),
+        question: typeof q?.question === 'string' ? q.question : '',
+        options: Array.isArray(q?.options) ? q.options.map(String) : [],
+        correct_index: correctIdx,
+        explanation:
+          typeof q?.explanation === 'string' ? q.explanation : theologicalExplanation,
+        theological_explanation: theologicalExplanation,
+      };
+    });
+
+    const total_pool_count =
+      typeof inner.total_pool_count === 'number'
+        ? inner.total_pool_count
+        : typeof inner.totalPoolCount === 'number'
+          ? inner.totalPoolCount
+          : undefined;
+
+    const rawBackstory = Array.isArray(inner.backstory) ? inner.backstory : [];
+    const backstory: LessonAiBackstoryItem[] = rawBackstory
+      .map((item: any) => ({
+        topic: typeof item?.topic === 'string' ? item.topic : typeof item?.title === 'string' ? item.title : '',
+        explanation:
+          typeof item?.explanation === 'string'
+            ? item.explanation
+            : typeof item?.description === 'string'
+              ? item.description
+              : '',
+      }))
+      .filter((item: LessonAiBackstoryItem) => Boolean(item.topic || item.explanation));
+
+    const rawFlashcards = Array.isArray(inner.flashcards) ? inner.flashcards : [];
+    const flashcards: LessonAiFlashcardItem[] = rawFlashcards
+      .map((item: any, idx: number) => ({
+        id: String(item?.id || item?._id || `fc_${idx}`),
+        question:
+          typeof item?.question === 'string'
+            ? item.question
+            : typeof item?.front === 'string'
+              ? item.front
+              : '',
+        answer:
+          typeof item?.answer === 'string'
+            ? item.answer
+            : typeof item?.back === 'string'
+              ? item.back
+              : '',
+        topic: typeof item?.topic === 'string' ? item.topic : undefined,
+      }))
+      .filter((fc: LessonAiFlashcardItem) => Boolean(fc.question || fc.answer));
+
+    const rawKeyTakeaways = Array.isArray(inner.key_takeaways)
+      ? inner.key_takeaways
+      : Array.isArray(inner.keyTakeaways)
+        ? inner.keyTakeaways
+        : [];
+    const key_takeaways: string[] = rawKeyTakeaways.map((t: unknown) => String(t)).filter(Boolean);
+
+    const hasAnyContent = Boolean(
+      summary.trim().length > 0 ||
+      quiz_pool.length > 0 ||
+      backstory.length > 0 ||
+      flashcards.length > 0 ||
+      key_takeaways.length > 0
+    );
+
+    const found =
+      typeof envelope.found === 'boolean'
+        ? envelope.found
+        : typeof root.found === 'boolean'
+          ? root.found
+          : hasAnyContent;
+
+    const hasAiData =
+      typeof envelope.hasAiData === 'boolean'
+        ? envelope.hasAiData
+        : typeof root.hasAiData === 'boolean'
+          ? root.hasAiData
+          : hasAnyContent;
+
+    const latest_attempt = normalizeLatestAiAttempt(inner.latest_attempt);
+
+    const normalized: LessonAiStudyData = {
+      found,
+      hasAiData,
+      summary,
+      quiz_pool,
+      total_pool_count,
+      backstory,
+      flashcards,
+      key_takeaways,
+      latest_attempt,
+      generated_at: typeof inner.generated_at === 'string' ? inner.generated_at : undefined,
+    };
+
+    return {
+      status: response.status,
+      success: true,
+      data: normalized,
+    };
+  },
+
+  /**
+   * 16b. Get Video Quizzes for Lesson
+   * Matches Postman: GET /courses/:courseId/content/modules/:moduleId/lessons/:lessonId/video-quizzes
+   */
+  async getVideoQuizzesForLesson(
+    courseId: string,
+    moduleId: string,
+    lessonId: string
+  ): Promise<ApiResponse<VideoQuizItem[]>> {
+    if (!courseId || !lessonId) {
+      return {
+        status: 400,
+        success: false,
+        error: 'Course ID and Lesson ID are required to fetch video quizzes.',
+        data: [],
+      };
+    }
+
+    const endpoint = `courses/${encodeURIComponent(courseId)}/content/modules/${encodeURIComponent(moduleId || 'default')}/lessons/${encodeURIComponent(lessonId)}/video-quizzes`;
+    const response = await ApiClient.get<any>(endpoint);
+
+    if (response.success && response.data) {
+      const items = unwrapArrayPayload(response.data);
+      const normalized: VideoQuizItem[] = items.map((raw: any, idx: number) => ({
+        id: String(raw.id || raw._id || `quiz_${idx}`),
+        _id: raw._id ? String(raw._id) : undefined,
+        lessonId: String(raw.lessonId || raw.lesson?._id || raw.lesson?.id || lessonId),
+        moduleId: String(raw.moduleId || raw.module?._id || raw.module?.id || moduleId),
+        courseId: String(raw.courseId || courseId),
+        questionText: String(raw.questionText || raw.question || ''),
+        questionType: raw.questionType === 'DESCRIPTIVE' ? 'DESCRIPTIVE' : 'MCQ',
+        timestampSeconds: Number(raw.timestampSeconds ?? raw.timestamp ?? 0) || 0,
+        options: Array.isArray(raw.options)
+          ? raw.options.map((opt: any) => ({
+              text: typeof opt === 'string' ? opt : String(opt?.text || ''),
+              isCorrect: typeof opt === 'object' ? Boolean(opt?.isCorrect) : false,
+            }))
+          : [],
+        maxMarks: typeof raw.maxMarks === 'number' ? raw.maxMarks : 1,
+        explanation: typeof raw.explanation === 'string' ? raw.explanation : undefined,
+      }));
 
       return {
         status: response.status,
@@ -1604,9 +2346,101 @@ export const DashboardService = {
 
     return {
       status: response.status,
-      success: response.success,
-      data: {},
-      error: response.error,
+      success: false,
+      error: response.error || 'Failed to load video quizzes.',
+      data: [],
+    };
+  },
+
+  /**
+   * 16c. Submit Video Quiz Answer
+   * Matches Postman: POST /courses/:courseId/content/modules/:moduleId/lessons/:lessonId/video-quizzes/:quizId/answers
+   */
+  async submitVideoQuizAnswer(
+    courseId: string,
+    moduleId: string,
+    lessonId: string,
+    quizId: string,
+    payload: VideoQuizSubmitPayload
+  ): Promise<ApiResponse<VideoQuizSubmitResponse>> {
+    if (!courseId || !lessonId || !quizId) {
+      return {
+        status: 400,
+        success: false,
+        error: 'Course ID, Lesson ID, and Quiz ID are required to submit answer.',
+      };
+    }
+
+    const endpoint = `courses/${encodeURIComponent(courseId)}/content/modules/${encodeURIComponent(moduleId || 'default')}/lessons/${encodeURIComponent(lessonId)}/video-quizzes/${encodeURIComponent(quizId)}/answers`;
+    const response = await ApiClient.post<any>(endpoint, payload);
+
+    if (response.success) {
+      const raw = response.data;
+      const unwrapped =
+        raw && typeof raw === 'object' && 'data' in raw && raw.data && typeof raw.data === 'object'
+          ? raw.data
+          : raw;
+      return {
+        status: response.status,
+        success: true,
+        data: unwrapped as VideoQuizSubmitResponse,
+      };
+    }
+
+    return {
+      status: response.status,
+      success: false,
+      error: response.error || 'Failed to submit video quiz answer.',
+    };
+  },
+
+  /**
+   * 16d. Get My Video Quiz Answers
+   * Matches Postman: GET /courses/:courseId/content/modules/:moduleId/lessons/:lessonId/video-quizzes/my-answers
+   */
+  async getVideoQuizMyAnswers(
+    courseId: string,
+    moduleId: string,
+    lessonId: string
+  ): Promise<ApiResponse<VideoQuizMyAnswerItem[]>> {
+    if (!courseId || !lessonId) {
+      return {
+        status: 400,
+        success: false,
+        error: 'Course ID and Lesson ID are required to fetch answers.',
+        data: [],
+      };
+    }
+
+    const endpoint = `courses/${encodeURIComponent(courseId)}/content/modules/${encodeURIComponent(moduleId || 'default')}/lessons/${encodeURIComponent(lessonId)}/video-quizzes/my-answers`;
+    const response = await ApiClient.get<any>(endpoint);
+
+    if (response.success && response.data) {
+      const items = unwrapArrayPayload(response.data);
+      const normalized: VideoQuizMyAnswerItem[] = items.map((raw: any, idx: number) => ({
+        id: String(raw.id || raw._id || `ans_${idx}`),
+        _id: raw._id ? String(raw._id) : undefined,
+        quizId: raw.quizId,
+        selectedOption: typeof raw.selectedOption === 'string' ? raw.selectedOption : undefined,
+        textAnswer: typeof raw.textAnswer === 'string' ? raw.textAnswer : undefined,
+        isCorrect: typeof raw.isCorrect === 'boolean' ? raw.isCorrect : undefined,
+        isGraded: typeof raw.isGraded === 'boolean' ? raw.isGraded : undefined,
+        marks: typeof raw.marks === 'number' ? raw.marks : undefined,
+        submittedAt: typeof raw.submittedAt === 'string' ? raw.submittedAt : undefined,
+      }));
+
+      return {
+        status: response.status,
+        success: true,
+        data: normalized,
+      };
+    }
+
+    return {
+      status: response.status,
+      success: false,
+      error: response.error || 'Failed to load video quiz answers.',
+      data: [],
     };
   },
 
@@ -1617,10 +2451,68 @@ export const DashboardService = {
   async submitLessonAiQuiz(
     courseId: string,
     lessonId: string,
-    answers: { questionIndex: number; selectedOption: number }[]
-  ): Promise<ApiResponse<any>> {
+    answers: LessonAiQuizSubmitAnswerPayload[]
+  ): Promise<ApiResponse<LessonAiQuizSubmitResponse>> {
+    if (!courseId || !lessonId) {
+      return {
+        status: 400,
+        success: false,
+        error: 'Course ID and Lesson ID are required to submit the quiz.',
+      };
+    }
+
     const endpoint = `courses/${encodeURIComponent(courseId)}/content/lessons/${encodeURIComponent(lessonId)}/ai-quiz/submit`;
-    return ApiClient.post<any>(endpoint, { answers });
+    const payloadAnswers = answers.map((ans) => ({
+      questionIndex: ans.questionIndex,
+      selectedOption: ans.selectedOption,
+    }));
+
+    const response = await ApiClient.post<any>(endpoint, { answers: payloadAnswers });
+    if (!response.success) {
+      return {
+        status: response.status,
+        success: false,
+        error: extractAiErrorMessage(response.data, response.error || 'Failed to submit quiz attempt.'),
+      };
+    }
+
+    const raw = response.data;
+    if (raw && typeof raw === 'object' && (raw as Record<string, unknown>).success === false) {
+      return {
+        status: response.status,
+        success: false,
+        error: extractAiErrorMessage(raw, response.error || 'Failed to submit quiz attempt.'),
+      };
+    }
+
+    const inner =
+      raw && typeof raw === 'object' && 'data' in raw && raw.data && typeof raw.data === 'object'
+        ? (raw.data as Record<string, any>)
+        : raw && typeof raw === 'object'
+          ? (raw as Record<string, any>)
+          : {};
+
+    const normalizedAttempt = normalizeLatestAiAttempt(
+      inner.attempt ?? inner.latest_attempt ?? (typeof inner.score === 'number' ? inner : null)
+    );
+
+    return {
+      status: response.status,
+      success: true,
+      data: {
+        attempt: normalizedAttempt,
+        latest_attempt: normalizedAttempt,
+        score: typeof inner.score === 'number' ? inner.score : normalizedAttempt?.score,
+        totalQuestions:
+          typeof inner.totalQuestions === 'number'
+            ? inner.totalQuestions
+            : normalizedAttempt?.totalQuestions,
+        percentage:
+          typeof inner.percentage === 'number' ? inner.percentage : normalizedAttempt?.percentage,
+        passed: typeof inner.passed === 'boolean' ? inner.passed : normalizedAttempt?.passed,
+        message: typeof inner.message === 'string' ? inner.message : undefined,
+      },
+    };
   },
 
   /**
@@ -1632,13 +2524,82 @@ export const DashboardService = {
     moduleId: string,
     lessonId: string,
     watchedSeconds: number
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<WatchTimeUpdateResponse>> {
+    if (!courseId || !lessonId) {
+      return {
+        status: 400,
+        success: false,
+        error: 'Course ID and Lesson ID are required to update watch time.',
+      };
+    }
+
+    const sanitizedSeconds = Math.max(0, Math.floor(Number(watchedSeconds) || 0));
     const endpoint = `progress/lessons/${encodeURIComponent(lessonId)}/watch-time`;
-    return ApiClient.patch<any>(endpoint, {
+    const response = await ApiClient.patch<any>(endpoint, {
       courseId,
-      moduleId,
-      watchedSeconds,
+      moduleId: moduleId || '',
+      watchedSeconds: sanitizedSeconds,
     });
+
+    const raw = response.data;
+    const unwrapped =
+      raw && typeof raw === 'object' && 'data' in raw && raw.data && typeof raw.data === 'object'
+        ? raw.data
+        : raw;
+
+    if (response.success) {
+      const payload = (unwrapped && typeof unwrapped === 'object' ? unwrapped : {}) as Record<string, any>;
+      const normalized: WatchTimeUpdateResponse = {
+        lessonId: payload.lessonId || lessonId,
+        courseId: payload.courseId || courseId,
+        moduleId: payload.moduleId || moduleId,
+        watchedSeconds:
+          typeof payload.watchedSeconds === 'number' ? payload.watchedSeconds : sanitizedSeconds,
+        progressPercentage:
+          typeof payload.progressPercentage === 'number'
+            ? payload.progressPercentage
+            : typeof payload.progress === 'number'
+              ? payload.progress
+              : undefined,
+        completed:
+          typeof payload.completed === 'boolean'
+            ? payload.completed
+            : typeof payload.isCompleted === 'boolean'
+              ? payload.isCompleted
+              : undefined,
+        isCompleted:
+          typeof payload.isCompleted === 'boolean'
+            ? payload.isCompleted
+            : typeof payload.completed === 'boolean'
+              ? payload.completed
+              : undefined,
+        isWatched: typeof payload.isWatched === 'boolean' ? payload.isWatched : undefined,
+        fullyWatched: typeof payload.fullyWatched === 'boolean' ? payload.fullyWatched : undefined,
+        canWatch: typeof payload.canWatch === 'boolean' ? payload.canWatch : undefined,
+        rewatchAllowed:
+          typeof payload.rewatchAllowed === 'boolean' ? payload.rewatchAllowed : undefined,
+        allowRewatch: typeof payload.allowRewatch === 'boolean' ? payload.allowRewatch : undefined,
+        watchLimitReached:
+          typeof payload.watchLimitReached === 'boolean' ? payload.watchLimitReached : undefined,
+        maxWatchesReached:
+          typeof payload.maxWatchesReached === 'boolean' ? payload.maxWatchesReached : undefined,
+        viewingRestricted:
+          typeof payload.viewingRestricted === 'boolean' ? payload.viewingRestricted : undefined,
+        message: typeof payload.message === 'string' ? payload.message : undefined,
+      };
+      return {
+        status: response.status,
+        success: true,
+        data: normalized,
+      };
+    }
+
+    return {
+      status: response.status,
+      success: false,
+      data: unwrapped as WatchTimeUpdateResponse | undefined,
+      error: response.error,
+    };
   },
 
   /**
@@ -1663,7 +2624,7 @@ export const DashboardService = {
    */
   async getCourseProgress(
     courseId: string
-  ): Promise<ApiResponse<{ progressPercentage: number; completedLessons?: string[]; currentLessonId?: string; lastLessonId?: string }>> {
+  ): Promise<ApiResponse<CourseProgressData>> {
     const endpoint = `progress/courses/${encodeURIComponent(courseId)}`;
     const response = await ApiClient.get<any>(endpoint);
 
@@ -1678,18 +2639,106 @@ export const DashboardService = {
         typeof data?.progressPercentage === 'number'
           ? data.progressPercentage
           : typeof data?.progress === 'number'
-          ? data.progress
-          : typeof data?.percentage === 'number'
-          ? data.percentage
-          : 0;
+            ? data.progress
+            : typeof data?.percentage === 'number'
+              ? data.percentage
+              : 0;
 
-      let completedLessons: string[] = [];
+      const hasExplicitCompletedIdsArray = Array.isArray(data?.completedLessonIds);
+      const completedLessonIds: string[] = hasExplicitCompletedIdsArray
+        ? data.completedLessonIds.map((id: any) => String(id)).filter(Boolean)
+        : [];
+      const completedSet = new Set<string>(completedLessonIds);
+      const lessonProgressById: Record<string, LessonProgressEntry> = {};
+      const watchedSecondsByLesson: Record<string, number> = {};
+
+      completedLessonIds.forEach((id) => {
+        lessonProgressById[id] = {
+          lessonId: id,
+          watchedSeconds: 0,
+          completed: true,
+        };
+      });
+
+      const progressEntries: any[] = [];
       if (Array.isArray(data?.completedLessons)) {
-        completedLessons = data.completedLessons
-          .map((item: any) => (typeof item === 'string' ? item : item?.lessonId || item?.id || item?._id || ''))
-          .filter(Boolean);
-      } else if (Array.isArray(data?.completedLessonIds)) {
-        completedLessons = data.completedLessonIds.map(String);
+        progressEntries.push(...data.completedLessons);
+      }
+      if (Array.isArray(data?.lessonProgress)) {
+        progressEntries.push(...data.lessonProgress);
+      }
+
+      for (const item of progressEntries) {
+        if (typeof item === 'string') {
+          if (item) {
+            completedSet.add(item);
+            lessonProgressById[item] = {
+              ...(lessonProgressById[item] || { lessonId: item, watchedSeconds: 0 }),
+              lessonId: item,
+              completed: true,
+            };
+          }
+          continue;
+        }
+        if (!item || typeof item !== 'object') continue;
+
+        const rawId =
+          typeof item.lessonId === 'object' && item.lessonId
+            ? item.lessonId._id || item.lessonId.id
+            : item.lessonId || item.id || item._id;
+        const lessonId = rawId ? String(rawId) : '';
+        if (!lessonId) continue;
+
+        const watchedSec = Math.max(
+          0,
+          Number(item.watchedSeconds ?? item.watchTime ?? 0) || 0
+        );
+        if (watchedSec > (watchedSecondsByLesson[lessonId] || 0)) {
+          watchedSecondsByLesson[lessonId] = watchedSec;
+        }
+
+        const explicitComplete =
+          item.completed === true ||
+          item.isCompleted === true ||
+          String(item.status || '').toUpperCase() === 'COMPLETED' ||
+          Boolean(item.completedAt);
+        const explicitIncomplete =
+          item.completed === false ||
+          item.isCompleted === false ||
+          String(item.status || '').toUpperCase() === 'IN_PROGRESS';
+
+        const isCompleted =
+          completedSet.has(lessonId) ||
+          explicitComplete ||
+          (!hasExplicitCompletedIdsArray &&
+            !explicitIncomplete &&
+            Boolean(item.id === lessonId || item._id === lessonId || !item.lessonId));
+
+        if (isCompleted) {
+          completedSet.add(lessonId);
+        }
+
+        const existing = lessonProgressById[lessonId];
+        lessonProgressById[lessonId] = {
+          lessonId,
+          watchedSeconds: Math.max(existing?.watchedSeconds || 0, watchedSec),
+          completed: Boolean(existing?.completed || isCompleted),
+          completedAt: item.completedAt || existing?.completedAt,
+          canWatch: typeof item.canWatch === 'boolean' ? item.canWatch : existing?.canWatch,
+          rewatchAllowed:
+            typeof item.rewatchAllowed === 'boolean'
+              ? item.rewatchAllowed
+              : typeof item.allowRewatch === 'boolean'
+                ? item.allowRewatch
+                : existing?.rewatchAllowed,
+          watchLimitReached:
+            typeof item.watchLimitReached === 'boolean'
+              ? item.watchLimitReached
+              : typeof item.maxWatchesReached === 'boolean'
+                ? item.maxWatchesReached
+                : existing?.watchLimitReached,
+          isLocked: typeof item.isLocked === 'boolean' ? item.isLocked : existing?.isLocked,
+        };
       }
 
       const currentLessonId = data?.currentLessonId || data?.lastLessonId || data?.lessonId;
@@ -1700,7 +2749,10 @@ export const DashboardService = {
         success: true,
         data: {
           progressPercentage,
-          completedLessons,
+          completedLessons: Array.from(completedSet),
+          completedLessonIds,
+          lessonProgressById,
+          watchedSecondsByLesson,
           currentLessonId,
           lastLessonId,
         },
@@ -1710,7 +2762,13 @@ export const DashboardService = {
     return {
       status: response.status,
       success: response.success,
-      data: { progressPercentage: 0, completedLessons: [] },
+      data: {
+        progressPercentage: 0,
+        completedLessons: [],
+        completedLessonIds: [],
+        lessonProgressById: {},
+        watchedSecondsByLesson: {},
+      },
       error: response.error,
     };
   },
@@ -1934,9 +2992,11 @@ export const DashboardService = {
    * 36. Get Available Regions for Pricing Resolution
    * GET /regions?slug={{orgSlug}}&localOnly=true
    */
-  async getRegions(): Promise<ApiResponse<any[]>> {
-    const slug = ENV.DEFAULT_ORG_SLUG || 'cotr';
-    return ApiClient.get<any[]>(`regions?slug=${slug}&localOnly=true`);
+  async getRegions(
+    slug?: string,
+    options?: { forceRefresh?: boolean }
+  ): Promise<ApiResponse<any[]>> {
+    return LmsAuthService.getAvailableRegions(slug, options);
   },
 };
 

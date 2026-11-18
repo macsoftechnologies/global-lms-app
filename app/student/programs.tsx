@@ -478,6 +478,10 @@ export default function StudentProgramsScreen() {
         style={[
           styles.subjectCard,
           isAccessible ? styles.subjectCardAccessible : styles.subjectCardLocked,
+          isDarkMode && {
+            backgroundColor: '#161F30',
+            borderColor: isAccessible ? '#065F46' : '#1F2937',
+          },
         ]}
         activeOpacity={isAccessible ? 1 : 0.88}
         onPress={() => {
@@ -518,9 +522,14 @@ export default function StudentProgramsScreen() {
                 </Text>
               </View>
             ) : (
-              <View style={styles.lockedStatusChip}>
-                <Ionicons name="lock-closed" size={12} color="#64748B" style={{ marginRight: 4 }} />
-                <Text style={styles.lockedStatusChipText}>
+              <View
+                style={[
+                  styles.lockedStatusChip,
+                  isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                ]}
+              >
+                <Ionicons name="lock-closed" size={12} color={isDarkMode ? '#CBD5E1' : '#64748B'} style={{ marginRight: 4 }} />
+                <Text style={[styles.lockedStatusChipText, isDarkMode && { color: '#CBD5E1' }]}>
                   {subject.enrollmentStatus === 'PENDING' ? 'Pending Approval' : 'Not Enrolled'}
                 </Text>
               </View>
@@ -535,7 +544,8 @@ export default function StudentProgramsScreen() {
             <Text
               style={[
                 styles.subjectTitle,
-                !isAccessible && styles.subjectTitleLocked,
+                isDarkMode && { color: '#F8FAFC' },
+                !isAccessible && [styles.subjectTitleLocked, isDarkMode && { color: '#CBD5E1' }],
               ]}
               numberOfLines={2}
             >
@@ -550,7 +560,7 @@ export default function StudentProgramsScreen() {
 
           {/* Description if returned by backend */}
           {subject.description ? (
-            <Text style={styles.subjectDescription} numberOfLines={2}>
+            <Text style={[styles.subjectDescription, isDarkMode && { color: '#94A3B8' }]} numberOfLines={2}>
               {subject.description}
             </Text>
           ) : null}
@@ -558,29 +568,37 @@ export default function StudentProgramsScreen() {
           {/* Metadata Chips: Credits, Exams, and Subject Code strictly from Backend */}
           <View style={styles.metaRow}>
             {subject.code ? (
-              <View style={styles.metaChip}>
-                <Text style={styles.metaChipText}>{subject.code}</Text>
+              <View style={[styles.metaChip, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+                <Text style={[styles.metaChipText, isDarkMode && { color: '#CBD5E1' }]}>{subject.code}</Text>
               </View>
             ) : null}
 
             {subject.credits !== undefined && subject.credits !== null && (
-              <View style={styles.metaChip}>
-                <Ionicons name="school-outline" size={12} color="#64748B" style={{ marginRight: 4 }} />
-                <Text style={styles.metaChipText}>{subject.credits} Credits</Text>
+              <View style={[styles.metaChip, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+                <Ionicons name="school-outline" size={12} color={isDarkMode ? '#94A3B8' : '#64748B'} style={{ marginRight: 4 }} />
+                <Text style={[styles.metaChipText, isDarkMode && { color: '#CBD5E1' }]}>{subject.credits} Credits</Text>
               </View>
             )}
 
             {subject.examsCount !== undefined && subject.examsCount !== null && (
-              <View style={styles.metaChip}>
-                <Ionicons name="document-text-outline" size={12} color="#64748B" style={{ marginRight: 4 }} />
-                <Text style={styles.metaChipText}>{subject.examsCount} Exams</Text>
+              <View style={[styles.metaChip, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+                <Ionicons name="document-text-outline" size={12} color={isDarkMode ? '#94A3B8' : '#64748B'} style={{ marginRight: 4 }} />
+                <Text style={[styles.metaChipText, isDarkMode && { color: '#CBD5E1' }]}>{subject.examsCount} Exams</Text>
               </View>
             )}
 
             {isAccessible && (
-              <View style={[styles.metaChip, { borderColor: '#A7F3D0', backgroundColor: '#ECFDF5' }]}>
+              <View
+                style={[
+                  styles.metaChip,
+                  {
+                    borderColor: isDarkMode ? '#065F46' : '#A7F3D0',
+                    backgroundColor: isDarkMode ? '#064E3B' : '#ECFDF5',
+                  },
+                ]}
+              >
                 <Ionicons name="checkmark-circle" size={12} color="#10B981" style={{ marginRight: 4 }} />
-                <Text style={[styles.metaChipText, { color: '#059669', fontWeight: '600' }]}>
+                <Text style={[styles.metaChipText, { color: isDarkMode ? '#34D399' : '#059669', fontWeight: '600' }]}>
                   {subject.enrollmentStatus === 'COMPLETED' ? 'Completed' : 'Enrolled'}
                 </Text>
               </View>
@@ -589,9 +607,14 @@ export default function StudentProgramsScreen() {
 
           {/* Callout Notice for Locked Courses */}
           {!isAccessible && (
-            <View style={styles.lockedNoticeBox}>
-              <Ionicons name="information-circle-outline" size={16} color="#64748B" style={{ marginRight: 6, marginTop: 1 }} />
-              <Text style={styles.lockedNoticeText}>
+            <View
+              style={[
+                styles.lockedNoticeBox,
+                isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+              ]}
+            >
+              <Ionicons name="information-circle-outline" size={16} color={isDarkMode ? '#94A3B8' : '#64748B'} style={{ marginRight: 6, marginTop: 1 }} />
+              <Text style={[styles.lockedNoticeText, isDarkMode && { color: '#CBD5E1' }]}>
                 {subject.enrollmentStatus === 'PENDING'
                   ? 'Your admission is currently pending review. Lessons will unlock once approved.'
                   : 'Enrollment required. Contact academic advisor to unlock lectures and learning materials.'}
@@ -611,12 +634,17 @@ export default function StudentProgramsScreen() {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={styles.lockedBtn}
+              style={[
+                styles.lockedBtn,
+                isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+              ]}
               onPress={() => handleLockedCoursePress(subject)}
               activeOpacity={0.8}
             >
-              <Ionicons name="lock-closed" size={15} color="#64748B" style={{ marginRight: 6 }} />
-              <Text style={styles.lockedBtnText}>Course Locked • View Details</Text>
+              <Ionicons name="lock-closed" size={15} color={isDarkMode ? '#CBD5E1' : '#64748B'} style={{ marginRight: 6 }} />
+              <Text style={[styles.lockedBtnText, isDarkMode && { color: '#CBD5E1' }]}>
+                Course Locked • View Details
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -627,11 +655,16 @@ export default function StudentProgramsScreen() {
   // Render Horizontal Academic Terms Selector for Mobile Screens
   const renderHorizontalTermsSelector = () => {
     return (
-      <View style={styles.termsSelectorSection}>
+      <View
+        style={[
+          styles.termsSelectorSection,
+          isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+        ]}
+      >
         <View style={styles.termsHeaderRow}>
           <View style={styles.termsTitleGroup}>
             <Ionicons name="layers-outline" size={18} color="#7C3AED" style={{ marginRight: 6 }} />
-            <Text style={styles.termsSectionTitle}>Academic Terms</Text>
+            <Text style={[styles.termsSectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Academic Terms</Text>
           </View>
           <View style={styles.termsCountBadge}>
             <Text style={styles.termsCountBadgeText}>{semesters.length} Terms</Text>
@@ -653,6 +686,7 @@ export default function StudentProgramsScreen() {
                 key={`term_chip_${sem.id}`}
                 style={[
                   styles.termChip,
+                  isDarkMode && !isSelected && { backgroundColor: '#1E293B', borderColor: '#334155' },
                   isSelected && styles.termChipActive,
                 ]}
                 onPress={() => setSelectedSemesterId(sem.id)}
@@ -668,6 +702,7 @@ export default function StudentProgramsScreen() {
                   <Text
                     style={[
                       styles.termChipTitle,
+                      isDarkMode && !isSelected && { color: '#F8FAFC' },
                       isSelected && styles.termChipTitleActive,
                     ]}
                   >
@@ -678,6 +713,7 @@ export default function StudentProgramsScreen() {
                 <Text
                   style={[
                     styles.termChipSubtitle,
+                    isDarkMode && !isSelected && { color: '#94A3B8' },
                     isSelected && styles.termChipSubtitleActive,
                   ]}
                 >
@@ -735,7 +771,11 @@ export default function StudentProgramsScreen() {
               return (
                 <TouchableOpacity
                   key={ep.id || pId}
-                  style={[styles.programPill, isSelected && styles.programPillActive]}
+                  style={[
+                    styles.programPill,
+                    isDarkMode && !isSelected && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                    isSelected && styles.programPillActive,
+                  ]}
                   onPress={() => {
                     if (pId) {
                       setActiveProgramId(pId);
@@ -743,7 +783,13 @@ export default function StudentProgramsScreen() {
                   }}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.programPillText, isSelected && styles.programPillTextActive]}>
+                  <Text
+                    style={[
+                      styles.programPillText,
+                      isDarkMode && !isSelected && { color: '#CBD5E1' },
+                      isSelected && styles.programPillTextActive,
+                    ]}
+                  >
                     {ep.program?.name || 'Program'}
                   </Text>
                 </TouchableOpacity>
@@ -757,13 +803,17 @@ export default function StudentProgramsScreen() {
       {isLoading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#7C3AED" />
-          <Text style={styles.loadingText}>Fetching curriculum from backend...</Text>
+          <Text style={[styles.loadingText, isDarkMode && { color: '#94A3B8' }]}>
+            Fetching curriculum from backend...
+          </Text>
         </View>
       ) : errorMessage ? (
         <View style={styles.centerContainer}>
           <Ionicons name="alert-circle-outline" size={54} color="#EF4444" />
-          <Text style={styles.errorTitle}>Unable to Load Curriculum</Text>
-          <Text style={styles.errorMessage}>{errorMessage}</Text>
+          <Text style={[styles.errorTitle, isDarkMode && { color: '#F8FAFC' }]}>
+            Unable to Load Curriculum
+          </Text>
+          <Text style={[styles.errorMessage, isDarkMode && { color: '#94A3B8' }]}>{errorMessage}</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={loadCurriculumData}>
             <Text style={styles.retryBtnText}>Retry Connection</Text>
           </TouchableOpacity>
@@ -771,8 +821,10 @@ export default function StudentProgramsScreen() {
       ) : !activeProgram ? (
         <View style={styles.centerContainer}>
           <Ionicons name="school-outline" size={56} color="#7C3AED" />
-          <Text style={styles.errorTitle}>No Active Degree Program</Text>
-          <Text style={styles.errorMessage}>
+          <Text style={[styles.errorTitle, isDarkMode && { color: '#F8FAFC' }]}>
+            No Active Degree Program
+          </Text>
+          <Text style={[styles.errorMessage, isDarkMode && { color: '#94A3B8' }]}>
             Your student account is not currently enrolled in any academic degree program.
           </Text>
           <TouchableOpacity
@@ -799,9 +851,14 @@ export default function StudentProgramsScreen() {
           {renderHorizontalTermsSelector()}
 
           {/* 2. Active Term Status Banner */}
-          <View style={styles.termBannerCard}>
+          <View
+            style={[
+              styles.termBannerCard,
+              isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' },
+            ]}
+          >
             <View style={styles.termBannerHeaderRow}>
-              <Text style={styles.termBannerTitle}>
+              <Text style={[styles.termBannerTitle, isDarkMode && { color: '#F8FAFC' }]}>
                 {selectedSemester ? selectedSemester.name : 'Curriculum'} — {currentSubjects.length}{' '}
                 {currentSubjects.length === 1 ? 'Subject' : 'Subjects'}
               </Text>
@@ -812,14 +869,21 @@ export default function StudentProgramsScreen() {
                   <Text style={styles.activeTermBadgeText}>Active Term</Text>
                 </View>
               ) : (
-                <View style={styles.lockedTermBadge}>
-                  <Ionicons name="lock-closed" size={11} color="#64748B" style={{ marginRight: 4 }} />
-                  <Text style={styles.lockedTermBadgeText}>Upcoming Term</Text>
+                <View
+                  style={[
+                    styles.lockedTermBadge,
+                    isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                  ]}
+                >
+                  <Ionicons name="lock-closed" size={11} color={isDarkMode ? '#CBD5E1' : '#64748B'} style={{ marginRight: 4 }} />
+                  <Text style={[styles.lockedTermBadgeText, isDarkMode && { color: '#CBD5E1' }]}>
+                    Upcoming Term
+                  </Text>
                 </View>
               )}
             </View>
 
-            <Text style={styles.enrolledStatusNotice}>
+            <Text style={[styles.enrolledStatusNotice, isDarkMode && { color: '#CBD5E1' }]}>
               {isCurrentActiveTerm
                 ? isAllEnrolledInSelectedTerm
                   ? '✓ You are enrolled in all subjects for this term'
@@ -832,10 +896,17 @@ export default function StudentProgramsScreen() {
 
           {/* 3. Subject Cards List */}
           {currentSubjects.length === 0 ? (
-            <View style={styles.emptyTermContainer}>
+            <View
+              style={[
+                styles.emptyTermContainer,
+                isDarkMode && { backgroundColor: '#161F30', borderColor: '#334155' },
+              ]}
+            >
               <Ionicons name="folder-open-outline" size={44} color="#94A3B8" />
-              <Text style={styles.emptyTermTitle}>No Subjects Found</Text>
-              <Text style={styles.emptyTermText}>
+              <Text style={[styles.emptyTermTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                No Subjects Found
+              </Text>
+              <Text style={[styles.emptyTermText, isDarkMode && { color: '#94A3B8' }]}>
                 No subjects are currently assigned to {selectedSemester?.name || 'this term'} in the backend curriculum.
               </Text>
             </View>

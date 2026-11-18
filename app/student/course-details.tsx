@@ -19,6 +19,7 @@ import { DashboardService } from '../../src/services/dashboardService';
 import { AuthStorage, AuthSession } from '../../src/services/authStorage';
 import { ENV } from '../../src/config/env';
 import { PublishedCourse, CourseRegionalPrice, CourseModule } from '../../src/types';
+import { useTheme } from '../../src/context/ThemeContext';
 
 /**
  * Resolves full thumbnail URL with backend server domain if relative
@@ -83,6 +84,7 @@ function formatCoursePrice(course: PublishedCourse, userRegionId?: string): stri
 }
 
 export default function CourseDetailsScreen() {
+  const { isDarkMode } = useTheme();
   const params = useLocalSearchParams<{
     courseId?: string;
     id?: string;
@@ -457,19 +459,19 @@ export default function CourseDetailsScreen() {
   const totalLessonsCount = modules.reduce((acc, m) => acc + (m.lessons?.length || 0), 0);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, !isDarkMode && { backgroundColor: '#F8FAFC' }]} edges={['top', 'bottom']}>
       {/* Top Header / Navigation Bar */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, !isDarkMode && { backgroundColor: '#FFFFFF', borderBottomColor: '#E2E8F0' }]}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, !isDarkMode && { backgroundColor: '#F1F5F9' }]}
           onPress={() => router.back()}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
+          <Ionicons name="arrow-back" size={22} color={isDarkMode ? '#FFFFFF' : '#0F172A'} />
         </TouchableOpacity>
 
-        <Text style={styles.topBarTitle} numberOfLines={1}>
+        <Text style={[styles.topBarTitle, !isDarkMode && { color: '#0F172A' }]} numberOfLines={1}>
           {course?.title || params.title || 'Course Details'}
         </Text>
 
@@ -480,7 +482,9 @@ export default function CourseDetailsScreen() {
       {isLoading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#38BDF8" />
-          <Text style={styles.loadingText}>Fetching course details from Global LMS server...</Text>
+          <Text style={[styles.loadingText, !isDarkMode && { color: '#64748B' }]}>
+            Fetching course details from Global LMS server...
+          </Text>
         </View>
       ) : errorMessage ? (
         /* Error State */
@@ -488,8 +492,10 @@ export default function CourseDetailsScreen() {
           <View style={styles.errorIconCircle}>
             <Ionicons name="alert-circle-outline" size={42} color="#EF4444" />
           </View>
-          <Text style={styles.errorTitle}>Failed to Load Course</Text>
-          <Text style={styles.errorSubtitle}>{errorMessage}</Text>
+          <Text style={[styles.errorTitle, !isDarkMode && { color: '#0F172A' }]}>
+            Failed to Load Course
+          </Text>
+          <Text style={[styles.errorSubtitle, !isDarkMode && { color: '#64748B' }]}>{errorMessage}</Text>
 
           <TouchableOpacity
             style={styles.retryButton}
@@ -505,21 +511,29 @@ export default function CourseDetailsScreen() {
             onPress={() => router.back()}
             activeOpacity={0.8}
           >
-            <Text style={styles.browseBackText}>Back to Courses</Text>
+            <Text style={[styles.browseBackText, !isDarkMode && { color: '#4F46E5' }]}>
+              Back to Courses
+            </Text>
           </TouchableOpacity>
         </View>
       ) : !course ? (
         /* Empty State */
         <View style={styles.centerContainer}>
           <Ionicons name="folder-open-outline" size={48} color="#64748B" />
-          <Text style={styles.emptyTitle}>Course Not Found</Text>
-          <Text style={styles.emptySubtitle}>The requested course is not available.</Text>
+          <Text style={[styles.emptyTitle, !isDarkMode && { color: '#0F172A' }]}>
+            Course Not Found
+          </Text>
+          <Text style={[styles.emptySubtitle, !isDarkMode && { color: '#64748B' }]}>
+            The requested course is not available.
+          </Text>
           <TouchableOpacity
             style={styles.browseBackButton}
             onPress={() => router.back()}
             activeOpacity={0.8}
           >
-            <Text style={styles.browseBackText}>Back to Courses</Text>
+            <Text style={[styles.browseBackText, !isDarkMode && { color: '#4F46E5' }]}>
+              Back to Courses
+            </Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -546,7 +560,7 @@ export default function CourseDetailsScreen() {
                 resizeMode="cover"
               />
             ) : (
-              <View style={styles.heroFallback}>
+              <View style={[styles.heroFallback, !isDarkMode && { backgroundColor: '#EEF2FF' }]}>
                 <Ionicons name="school" size={64} color="#6366F1" />
               </View>
             )}
@@ -580,7 +594,9 @@ export default function CourseDetailsScreen() {
 
           {/* Title & Slug */}
           <View style={styles.titleSection}>
-            <Text style={styles.courseTitle}>{course.title}</Text>
+            <Text style={[styles.courseTitle, !isDarkMode && { color: '#0F172A' }]}>
+              {course.title}
+            </Text>
             {course.slug ? (
               <View style={styles.slugContainer}>
                 <Ionicons name="link-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
@@ -592,44 +608,44 @@ export default function CourseDetailsScreen() {
           {/* Key Course Metrics Row (Credits, Validity, Modules, Lessons) */}
           <View style={styles.metricsGrid}>
             {/* Metric 1: Credits */}
-            <View style={styles.metricCard}>
+            <View style={[styles.metricCard, !isDarkMode && { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' }]}>
               <View style={[styles.metricIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
                 <Ionicons name="ribbon-outline" size={18} color="#10B981" />
               </View>
-              <Text style={styles.metricValue}>
+              <Text style={[styles.metricValue, !isDarkMode && { color: '#0F172A' }]}>
                 {course.credits ?? course.creditHours ?? 0}
               </Text>
               <Text style={styles.metricLabel}>Credits</Text>
             </View>
 
             {/* Metric 2: Validity */}
-            <View style={styles.metricCard}>
+            <View style={[styles.metricCard, !isDarkMode && { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' }]}>
               <View style={[styles.metricIconBox, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
                 <Ionicons name="calendar-outline" size={18} color="#38BDF8" />
               </View>
-              <Text style={styles.metricValue}>
+              <Text style={[styles.metricValue, !isDarkMode && { color: '#0F172A' }]}>
                 {course.validityDays ? `${course.validityDays}d` : 'Lifetime'}
               </Text>
               <Text style={styles.metricLabel}>Validity</Text>
             </View>
 
             {/* Metric 3: Modules */}
-            <View style={styles.metricCard}>
+            <View style={[styles.metricCard, !isDarkMode && { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' }]}>
               <View style={[styles.metricIconBox, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
                 <Ionicons name="layers-outline" size={18} color="#8B5CF6" />
               </View>
-              <Text style={styles.metricValue}>
+              <Text style={[styles.metricValue, !isDarkMode && { color: '#0F172A' }]}>
                 {modules.length}
               </Text>
               <Text style={styles.metricLabel}>Modules</Text>
             </View>
 
             {/* Metric 4: Lessons / Lectures */}
-            <View style={styles.metricCard}>
+            <View style={[styles.metricCard, !isDarkMode && { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' }]}>
               <View style={[styles.metricIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
                 <Ionicons name="play-circle-outline" size={18} color="#F59E0B" />
               </View>
-              <Text style={styles.metricValue}>
+              <Text style={[styles.metricValue, !isDarkMode && { color: '#0F172A' }]}>
                 {totalLessonsCount > 0 ? totalLessonsCount : course.enrolledCount ?? 0}
               </Text>
               <Text style={styles.metricLabel}>
@@ -639,9 +655,9 @@ export default function CourseDetailsScreen() {
           </View>
 
           {/* Description Section */}
-          <View style={styles.cardSection}>
-            <Text style={styles.sectionHeading}>Course Description</Text>
-            <Text style={styles.descriptionText}>
+          <View style={[styles.cardSection, !isDarkMode && { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' }]}>
+            <Text style={[styles.sectionHeading, !isDarkMode && { color: '#0F172A' }]}>Course Description</Text>
+            <Text style={[styles.descriptionText, !isDarkMode && { color: '#475569' }]}>
               {course.description ||
                 'Comprehensive academic subject curriculum prepared for Global LMS students.'}
             </Text>
@@ -649,21 +665,26 @@ export default function CourseDetailsScreen() {
 
           {/* Curriculum Preview Section */}
           {modules.length > 0 && (
-            <View style={styles.cardSection}>
+            <View style={[styles.cardSection, !isDarkMode && { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={styles.sectionHeading}>Course Curriculum ({modules.length} Modules)</Text>
+                <Text style={[styles.sectionHeading, !isDarkMode && { color: '#0F172A' }, { marginBottom: 0 }]}>
+                  Course Curriculum ({modules.length} Modules)
+                </Text>
                 <View style={styles.syllabusBadge}>
                   <Text style={styles.syllabusBadgeText}>Syllabus Preview</Text>
                 </View>
               </View>
 
               {modules.map((m, idx) => (
-                <View key={`mod_prev_${m.id || idx}`} style={styles.curriculumPreviewItem}>
-                  <View style={styles.modNumBadge}>
-                    <Text style={styles.modNumBadgeText}>{idx + 1}</Text>
+                <View
+                  key={`mod_prev_${m.id || idx}`}
+                  style={[styles.curriculumPreviewItem, !isDarkMode && { borderBottomColor: '#F1F5F9' }]}
+                >
+                  <View style={[styles.modNumBadge, !isDarkMode && { backgroundColor: '#EEF2FF' }]}>
+                    <Text style={[styles.modNumBadgeText, !isDarkMode && { color: '#4F46E5' }]}>{idx + 1}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.curriculumPreviewTitle} numberOfLines={1}>
+                    <Text style={[styles.curriculumPreviewTitle, !isDarkMode && { color: '#0F172A' }]} numberOfLines={1}>
                       {m.title}
                     </Text>
                     <Text style={styles.curriculumPreviewMeta}>
@@ -676,54 +697,60 @@ export default function CourseDetailsScreen() {
           )}
 
           {/* Academic Affiliation Details (Program, Semester, Instructors) */}
-          <View style={styles.cardSection}>
-            <Text style={styles.sectionHeading}>Academic Information</Text>
+          <View style={[styles.cardSection, !isDarkMode && { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' }]}>
+            <Text style={[styles.sectionHeading, !isDarkMode && { color: '#0F172A' }]}>Academic Information</Text>
 
             {course.programId ? (
-              <View style={styles.infoRow}>
+              <View style={[styles.infoRow, !isDarkMode && { borderBottomColor: '#F1F5F9' }]}>
                 <Text style={styles.infoLabel}>Program ID:</Text>
-                <Text style={styles.infoValue} numberOfLines={1}>{course.programId}</Text>
+                <Text style={[styles.infoValue, !isDarkMode && { color: '#0F172A' }]} numberOfLines={1}>
+                  {course.programId}
+                </Text>
               </View>
             ) : null}
 
             {course.semesterId ? (
-              <View style={styles.infoRow}>
+              <View style={[styles.infoRow, !isDarkMode && { borderBottomColor: '#F1F5F9' }]}>
                 <Text style={styles.infoLabel}>Semester ID:</Text>
-                <Text style={styles.infoValue} numberOfLines={1}>{course.semesterId}</Text>
+                <Text style={[styles.infoValue, !isDarkMode && { color: '#0F172A' }]} numberOfLines={1}>
+                  {course.semesterId}
+                </Text>
               </View>
             ) : null}
 
             {Array.isArray(course.instructorIds) && course.instructorIds.length > 0 ? (
-              <View style={styles.infoRow}>
+              <View style={[styles.infoRow, !isDarkMode && { borderBottomColor: '#F1F5F9' }]}>
                 <Text style={styles.infoLabel}>Instructors ({course.instructorIds.length}):</Text>
-                <Text style={styles.infoValue} numberOfLines={1}>
+                <Text style={[styles.infoValue, !isDarkMode && { color: '#0F172A' }]} numberOfLines={1}>
                   {course.instructorIds.join(', ')}
                 </Text>
               </View>
             ) : null}
 
-            <View style={styles.infoRow}>
+            <View style={[styles.infoRow, !isDarkMode && { borderBottomColor: '#F1F5F9' }]}>
               <Text style={styles.infoLabel}>Course ID:</Text>
-              <Text style={styles.infoValue} numberOfLines={1}>{course.id || activeCourseId}</Text>
+              <Text style={[styles.infoValue, !isDarkMode && { color: '#0F172A' }]} numberOfLines={1}>
+                {course.id || activeCourseId}
+              </Text>
             </View>
 
             {course.credits !== undefined && course.credits !== null ? (
-              <View style={styles.infoRow}>
+              <View style={[styles.infoRow, !isDarkMode && { borderBottomColor: '#F1F5F9' }]}>
                 <Text style={styles.infoLabel}>Credits:</Text>
-                <Text style={styles.infoValue}>{String(course.credits)}</Text>
+                <Text style={[styles.infoValue, !isDarkMode && { color: '#0F172A' }]}>{String(course.credits)}</Text>
               </View>
             ) : null}
 
             {((course as any).examsCount !== undefined || (course as any).totalExams !== undefined) ? (
-              <View style={styles.infoRow}>
+              <View style={[styles.infoRow, !isDarkMode && { borderBottomColor: '#F1F5F9' }]}>
                 <Text style={styles.infoLabel}>Exams:</Text>
-                <Text style={styles.infoValue}>
+                <Text style={[styles.infoValue, !isDarkMode && { color: '#0F172A' }]}>
                   {String((course as any).examsCount ?? (course as any).totalExams ?? 0)}
                 </Text>
               </View>
             ) : null}
 
-            <View style={styles.infoRow}>
+            <View style={[styles.infoRow, !isDarkMode && { borderBottomColor: '#F1F5F9' }, { borderBottomWidth: 0 }]}>
               <Text style={styles.infoLabel}>Access Entitlement:</Text>
               <Text style={[styles.infoValue, { color: isEntitled ? '#10B981' : '#F59E0B' }]}>
                 {isEntitled ? 'Enrolled (Full Access)' : 'Not Enrolled'}
@@ -733,8 +760,8 @@ export default function CourseDetailsScreen() {
 
           {/* Regional Pricing Breakdown (if configured) */}
           {Array.isArray(course.regionalPrices) && course.regionalPrices.length > 0 ? (
-            <View style={styles.cardSection}>
-              <Text style={styles.sectionHeading}>Regional Pricing</Text>
+            <View style={[styles.cardSection, !isDarkMode && { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' }]}>
+              <Text style={[styles.sectionHeading, !isDarkMode && { color: '#0F172A' }]}>Regional Pricing</Text>
               {course.regionalPrices.map((rp: CourseRegionalPrice, idx: number) => {
                 const rawId = typeof rp.regionId === 'string' ? rp.regionId : (rp.regionId as any)?.id || (rp.regionId as any)?._id || '';
                 const regName =
@@ -744,8 +771,8 @@ export default function CourseDetailsScreen() {
                   (rp.currency === 'INR' ? 'India' : rawId ? `Region (${rp.currency || 'Standard'})` : `Region ${idx + 1}`);
                 const cur = rp.currency || 'USD';
                 return (
-                  <View key={`reg_${idx}`} style={styles.regionalPriceRow}>
-                    <Text style={styles.regionalPriceName}>{regName}</Text>
+                  <View key={`reg_${idx}`} style={[styles.regionalPriceRow, !isDarkMode && { borderBottomColor: '#F1F5F9' }]}>
+                    <Text style={[styles.regionalPriceName, !isDarkMode && { color: '#0F172A' }]}>{regName}</Text>
                     <Text style={styles.regionalPriceAmount}>
                       {rp.price === 0 ? 'Free' : `${cur} ${Number(rp.price).toFixed(2)}`}
                     </Text>
@@ -758,15 +785,21 @@ export default function CourseDetailsScreen() {
           {/* ACTION BUTTON SECTION - Strictly adheres to Required Conditions */}
           <View style={styles.actionContainer}>
             {isCheckingAccess ? (
-              <View style={styles.primaryActionButton}>
+              <View style={[styles.primaryActionButton, styles.buyNowButton]}>
                 <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
                 <Text style={styles.primaryActionButtonText}>Checking Access...</Text>
               </View>
             ) : !isPublished ? (
               /* Condition: Course unavailable or unpublished → Do not allow purchase */
-              <View style={[styles.primaryActionButton, styles.disabledButton]}>
-                <Ionicons name="ban-outline" size={20} color="#94A3B8" style={{ marginRight: 8 }} />
-                <Text style={[styles.primaryActionButtonText, { color: '#94A3B8' }]}>
+              <View
+                style={[
+                  styles.primaryActionButton,
+                  styles.disabledButton,
+                  !isDarkMode && { backgroundColor: '#E2E8F0', borderColor: '#CBD5E1' },
+                ]}
+              >
+                <Ionicons name="ban-outline" size={20} color="#64748B" style={{ marginRight: 8 }} />
+                <Text style={[styles.primaryActionButtonText, { color: '#64748B' }]}>
                   Course Currently Unavailable
                 </Text>
               </View>
@@ -815,12 +848,19 @@ export default function CourseDetailsScreen() {
         }}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContentBox}>
+          <View
+            style={[
+              styles.modalContentBox,
+              isDarkMode && { backgroundColor: '#111827', borderWidth: 1, borderColor: '#1F2937' },
+            ]}
+          >
             {/* Modal Header */}
-            <View style={styles.modalHeaderRow}>
+            <View style={[styles.modalHeaderRow, isDarkMode && { borderBottomColor: '#1F2937' }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Ionicons name="shield-checkmark" size={20} color="#4F46E5" style={{ marginRight: 8 }} />
-                <Text style={styles.modalHeaderTitle}>Confirm Purchase</Text>
+                <Text style={[styles.modalHeaderTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                  Confirm Purchase
+                </Text>
               </View>
               {!isPurchasing && (
                 <TouchableOpacity
@@ -833,23 +873,42 @@ export default function CourseDetailsScreen() {
             </View>
 
             {/* Modal Body */}
-            <Text style={styles.modalNoticeText}>
+            <Text style={[styles.modalNoticeText, isDarkMode && { color: '#CBD5E1' }]}>
               {isFree
                 ? `You are about to enroll in the free course `
                 : `Tuition settlement details for `}
-              <Text style={{ fontWeight: '700', color: '#0F172A' }}>{course?.title}</Text>.
+              <Text style={{ fontWeight: '700', color: isDarkMode ? '#F8FAFC' : '#0F172A' }}>
+                {course?.title}
+              </Text>
+              .
             </Text>
 
             {/* Price Breakdown Card */}
-            <View style={styles.orderSummaryCard}>
+            <View
+              style={[
+                styles.orderSummaryCard,
+                isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+              ]}
+            >
               <View style={styles.orderSummaryRow}>
-                <Text style={styles.orderSummaryLabel}>Course Price:</Text>
-                <Text style={styles.orderSummaryValue}>{priceDisplay}</Text>
+                <Text style={[styles.orderSummaryLabel, isDarkMode && { color: '#94A3B8' }]}>
+                  Course Price:
+                </Text>
+                <Text style={[styles.orderSummaryValue, isDarkMode && { color: '#F8FAFC' }]}>
+                  {priceDisplay}
+                </Text>
               </View>
 
               <View style={[styles.orderSummaryRow, { borderBottomWidth: 0, paddingTop: 10, marginTop: 4 }]}>
-                <Text style={[styles.orderSummaryLabel, { fontWeight: '700', color: '#0F172A' }]}>Total:</Text>
-                <Text style={[styles.orderSummaryValue, { fontWeight: '800', color: '#4F46E5', fontSize: 16 }]}>
+                <Text
+                  style={[
+                    styles.orderSummaryLabel,
+                    { fontWeight: '700', color: isDarkMode ? '#F8FAFC' : '#0F172A' },
+                  ]}
+                >
+                  Total:
+                </Text>
+                <Text style={[styles.orderSummaryValue, { fontWeight: '800', color: isDarkMode ? '#818CF8' : '#4F46E5', fontSize: 16 }]}>
                   {priceDisplay}
                 </Text>
               </View>
@@ -857,11 +916,18 @@ export default function CourseDetailsScreen() {
 
             {/* Payment Notice Box for Paid Courses */}
             {!isFree && (
-              <View style={styles.paymentNoticeBox}>
+              <View
+                style={[
+                  styles.paymentNoticeBox,
+                  isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.14)', borderColor: 'rgba(217, 119, 6, 0.35)' },
+                ]}
+              >
                 <Ionicons name="information-circle" size={18} color="#D97706" style={{ marginRight: 8, marginTop: 1 }} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.paymentNoticeTitle}>Payment Verification Required</Text>
-                  <Text style={styles.paymentNoticeDesc}>
+                  <Text style={[styles.paymentNoticeTitle, isDarkMode && { color: '#FBBF24' }]}>
+                    Payment Verification Required
+                  </Text>
+                  <Text style={[styles.paymentNoticeDesc, isDarkMode && { color: '#FCD34D' }]}>
                     Online payment gateway checkout requires backend order endpoints. Once your payment is recorded in the system, tap &quot;Verify Payment Status&quot; below to unlock full course access.
                   </Text>
                 </View>
@@ -872,27 +938,38 @@ export default function CourseDetailsScreen() {
             <View style={styles.orderFeaturesList}>
               <View style={styles.featureItemRow}>
                 <Ionicons name="checkmark-circle" size={16} color="#10B981" style={{ marginRight: 6 }} />
-                <Text style={styles.featureItemText}>Full Lifetime Access to all video lectures</Text>
+                <Text style={[styles.featureItemText, isDarkMode && { color: '#CBD5E1' }]}>
+                  Full Lifetime Access to all video lectures
+                </Text>
               </View>
               <View style={styles.featureItemRow}>
                 <Ionicons name="checkmark-circle" size={16} color="#10B981" style={{ marginRight: 6 }} />
-                <Text style={styles.featureItemText}>ATA Theological Seminary Accredited</Text>
+                <Text style={[styles.featureItemText, isDarkMode && { color: '#CBD5E1' }]}>
+                  ATA Theological Seminary Accredited
+                </Text>
               </View>
               <View style={styles.featureItemRow}>
                 <Ionicons name="checkmark-circle" size={16} color="#10B981" style={{ marginRight: 6 }} />
-                <Text style={styles.featureItemText}>Instant Access to Interactive AI Study Modules</Text>
+                <Text style={[styles.featureItemText, isDarkMode && { color: '#CBD5E1' }]}>
+                  Instant Access to Interactive AI Study Modules
+                </Text>
               </View>
             </View>
 
             {/* Modal Actions */}
             <View style={styles.modalActionsRow}>
               <TouchableOpacity
-                style={styles.cancelModalButton}
+                style={[
+                  styles.cancelModalButton,
+                  isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                ]}
                 onPress={() => setIsConfirmModalVisible(false)}
                 disabled={isPurchasing}
                 activeOpacity={0.7}
               >
-                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+                <Text style={[styles.cancelModalButtonText, isDarkMode && { color: '#CBD5E1' }]}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
 
               {isFree ? (
@@ -935,15 +1012,20 @@ export default function CourseDetailsScreen() {
 
             {!isFree && (
               <TouchableOpacity
-                style={styles.viewPaymentHistoryBtn}
+                style={[
+                  styles.viewPaymentHistoryBtn,
+                  isDarkMode && { backgroundColor: '#1E1B4B', borderColor: '#312E81' },
+                ]}
                 onPress={() => {
                   setIsConfirmModalVisible(false);
                   router.push('/student/payments');
                 }}
                 activeOpacity={0.8}
               >
-                <Ionicons name="receipt-outline" size={15} color="#4F46E5" style={{ marginRight: 6 }} />
-                <Text style={styles.viewPaymentHistoryBtnText}>View My Payments & Invoices</Text>
+                <Ionicons name="receipt-outline" size={15} color={isDarkMode ? '#818CF8' : '#4F46E5'} style={{ marginRight: 6 }} />
+                <Text style={[styles.viewPaymentHistoryBtnText, isDarkMode && { color: '#818CF8' }]}>
+                  View My Payments &amp; Invoices
+                </Text>
               </TouchableOpacity>
             )}
           </View>

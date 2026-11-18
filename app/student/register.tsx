@@ -1,36 +1,44 @@
-
-
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput as RNTextInput,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import { useTheme } from '../../src/context/ThemeContext';
+import { ENV } from '../../src/config/env';
 import { LmsAuthService } from '../../src/services/lmsAuthService';
 import { AuthStorage } from '../../src/services/authStorage';
-import { ENV } from '../../src/config/env';
 import {
   DocumentItem,
+  FormQuestion,
+  OrganizationInfo,
   ProgramOption,
+  PublicSubscriptionPlan,
   RegionOption,
   StudentDocuments,
-  StudentRegistrationPayload,
 } from '../../src/types';
+import {
+  buildStudentRegistrationPayload,
+  resolveBackendMediaUrl,
+  sanitizeDynamicFieldInput,
+  validateAndNormalizeDateString,
+} from '../../src/utils/registrationHelpers';
 
-type DocKey =
+type SingleDocKey =
   | 'photo'
   | 'aadhaarFront'
   | 'aadhaarBack'
@@ -38,570 +46,867 @@ type DocKey =
   | 'interCert'
   | 'degreeCert'
   | 'degreeTranscript'
-  | 'referenceLetter'
-  | 'otherCertificates';
+  | 'referenceLetter';
 
 interface DocFieldConfig {
-  key: DocKey;
+  key: SingleDocKey;
   label: string;
-  required: boolean;
   hint: string;
+  imageOnly?: boolean;
 }
 
-const DOCUMENT_ITEMS: DocFieldConfig[] = [
+const REQUIRED_DOC_FIELDS: DocFieldConfig[] = [
   {
     key: 'photo',
-    label: 'PASSPORT SIZE PHOTOGRAPH',
-    required: true,
-    hint: 'Recent clear portrait photo (JPG or PNG, max 5MB)',
+    label: 'Passport Size Photo',
+    hint: 'Clear portrait photo (.jpg, .jpeg, .png • max 5 MB)',
+    imageOnly: true,
   },
   {
     key: 'aadhaarFront',
-    label: 'AADHAAR / NATIONAL ID (FRONT)',
-    required: true,
-    hint: 'Front side of Government photo ID (PDF/JPG)',
+    label: 'Aadhaar Card (Front Side)',
+    hint: 'Front side scan (.pdf, .jpg, .jpeg, .png)',
   },
   {
     key: 'aadhaarBack',
-    label: 'AADHAAR / NATIONAL ID (BACK)',
-    required: false,
-    hint: 'Reverse side containing address verification',
+    label: 'Aadhaar Card (Back Side)',
+    hint: 'Back side with address details (.pdf, .jpg, .jpeg, .png)',
   },
   {
     key: 'tenthCert',
-    label: '10TH / SSC / SECONDARY CERTIFICATE',
-    required: true,
-    hint: 'Passing certificate for age and secondary education proof',
+    label: '10th / SSC Certificate',
+    hint: 'Secondary school pass certificate (.pdf, .jpg, .jpeg, .png)',
   },
   {
     key: 'interCert',
-    label: '12TH / INTERMEDIATE CERTIFICATE',
-    required: true,
-    hint: 'Higher secondary / +2 completion certificate',
+    label: 'Intermediate / 12th Certificate',
+    hint: 'Higher secondary certificate (.pdf, .jpg, .jpeg, .png)',
   },
   {
     key: 'degreeCert',
-    label: 'DEGREE CONVOCATION CERTIFICATE',
-    required: false,
-    hint: 'Undergraduate convocation degree certificate',
+    label: 'Degree Certificate',
+    hint: 'Undergraduate convocation certificate (.pdf, .jpg, .jpeg, .png)',
   },
   {
     key: 'degreeTranscript',
-    label: 'OFFICIAL DEGREE TRANSCRIPT',
-    required: false,
-    hint: 'Consolidated marks transcript from recognized university',
+    label: 'Degree Academic Transcript',
+    hint: 'Official consolidated marks sheet (.pdf, .jpg, .jpeg, .png)',
   },
   {
     key: 'referenceLetter',
-    label: 'PASTOR / SPIRITUAL REFERENCE LETTER',
-    required: true,
-    hint: 'Recommendation letter from your senior pastor',
+    label: 'Reference Letter (Pastor / Elder)',
+    hint: 'Signed recommendation letter (.pdf, .jpg, .jpeg, .png)',
   },
 ];
 
-export default function StudentRegisterScreen() {
-  // Helper Dropdown APIs
-  const [regions, setRegions] = useState<RegionOption[]>([]);
-  const [programs, setPrograms] = useState<ProgramOption[]>([]);
-  const [isLoadingDropdowns, setIsLoadingDropdowns] = useState(true);
+const TRACK_OPTIONS = [
+  { value: 'ATA', label: 'ATA (Asia Theological Association)' },
+  { value: 'NON_ATA', label: 'NON-ATA' },
+] as const;
 
-  // Modal Selector State
-  const [modalType, setModalType] = useState<
-    'track' | 'region' | 'gender' | 'marital' | 'program' | null
-  >(null);
+type ModalConfig =
+  | { type: 'track'; title: string }
+  | { type: 'region'; title: string }
+  | { type: 'program'; title: string; key: string }
+  | { type: 'dynamic'; title: string; key: string; options: string[] }
+  | null;
 
-  // SECTION 1: Admission Track & Personal Details
-  const [ataStatus, setAtaStatus] = useState<string>('');
-  const [regionId, setRegionId] = useState<string>('');
+const INITIAL_DOCUMENTS: StudentDocuments = {
+  otherCertificates: [],
+};
+
+export default function StudentRegistrationScreen() {
+  const { isDarkMode } = useTheme();
+  const params = useLocalSearchParams<{ organizationCode?: string; slug?: string }>();
+  const scrollViewRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const submitLockRef = useRef(false);
+
+  const [ataStatus, setAtaStatus] = useState('');
+  const [regionId, setRegionId] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [mobile, setMobile] = useState('');
-  const [organizationCode, setOrganizationCode] = useState(ENV.DEFAULT_ORG_SLUG || 'org1');
+  const [organizationCode, setOrganizationCode] = useState('');
+  const [verifiedSlug, setVerifiedSlug] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // SECTION 2: Residence & Background Details
-  const [countryOfCitizenship, setCountryOfCitizenship] = useState('India');
-  const [countryLivingIn, setCountryLivingIn] = useState('India');
-  const [gender, setGender] = useState<string>('');
-  const [maritalStatus, setMaritalStatus] = useState<string>('');
-  const [dateOfBirth, setDateOfBirth] = useState('');
-  const [motherTongue, setMotherTongue] = useState('');
-  const [otherLanguages, setOtherLanguages] = useState('');
-  const [bornAgainDate, setBornAgainDate] = useState('');
-  const [churchDenomination, setChurchDenomination] = useState('');
-  const [localChurch, setLocalChurch] = useState('');
-  const [churchDetails, setChurchDetails] = useState('');
-  const [referenceProvider, setReferenceProvider] = useState('');
-  const [parentName, setParentName] = useState('');
-  const [parentPhone, setParentPhone] = useState('');
-  const [specialHonors, setSpecialHonors] = useState('');
-
-  // Address Details
-  const [address, setAddress] = useState('');
-  const [city, setCity] = useState('');
-  const [stateName, setStateName] = useState('');
-  const [pincode] = useState('');
-  const [currentProfession] = useState('');
-
-  // SECTION 3: Academic Qualifications & Documents
-  const [highestEducation, setHighestEducation] = useState('');
-  const [theologicalQualifications, setTheologicalQualifications] = useState('');
-  const [interestedCourse, setInterestedCourse] = useState<string>('');
-  const [uploadedDocs, setUploadedDocs] = useState<Record<DocKey, DocumentItem | undefined>>({
-    photo: undefined,
-    aadhaarFront: undefined,
-    aadhaarBack: undefined,
-    tenthCert: undefined,
-    interCert: undefined,
-    degreeCert: undefined,
-    degreeTranscript: undefined,
-    referenceLetter: undefined,
-    otherCertificates: undefined,
-  });
-  const [uploadingDocKey, setUploadingDocKey] = useState<DocKey | null>(null);
-
-  // SECTION 4: Declaration
+  const [countryOfCitizenship, setCountryOfCitizenship] = useState('');
+  const [countryLivingIn, setCountryLivingIn] = useState('');
+  const [dynamicAnswers, setDynamicAnswers] = useState<Record<string, string | boolean>>({});
+  const [documents, setDocuments] = useState<StudentDocuments>(INITIAL_DOCUMENTS);
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
+
+  const [orgInfo, setOrgInfo] = useState<OrganizationInfo | null>(null);
+  const [orgLoading, setOrgLoading] = useState(true);
+  const [orgError, setOrgError] = useState<string | null>(null);
+
+  const [regions, setRegions] = useState<RegionOption[]>([]);
+  const [regionsLoading, setRegionsLoading] = useState(true);
+  const [regionsError, setRegionsError] = useState<string | null>(null);
+
+  const [programs, setPrograms] = useState<ProgramOption[]>([]);
+  const [programsLoading, setProgramsLoading] = useState(true);
+  const [programsError, setProgramsError] = useState<string | null>(null);
+
+  const [formQuestions, setFormQuestions] = useState<FormQuestion[]>([]);
+  const [questionsLoading, setQuestionsLoading] = useState(true);
+  const [questionsError, setQuestionsError] = useState<string | null>(null);
+
+  const [regionPlans, setRegionPlans] = useState<PublicSubscriptionPlan[]>([]);
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
+
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitErrorBanner, setSubmitErrorBanner] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittedState, setSubmittedState] = useState<{
+    message: string;
+    organizationName: string;
+    trackLabel: string;
+  } | null>(null);
 
-  // Track options
-  const trackOptions = [
-    { label: 'ATA Accredited', value: 'ATA' },
-    { label: 'Non-ATA / Direct Track', value: 'NON_ATA' },
-  ];
+  const [activeModal, setActiveModal] = useState<ModalConfig>(null);
 
-  const genderOptions = ['Male', 'Female', 'Other'];
-  const maritalOptions = ['Single', 'Married', 'Widowed', 'Other'];
+  const styles = useMemo(() => createStyles(isDarkMode), [isDarkMode]);
 
-  // Load helper APIs for regions and programs
-  useEffect(() => {
-    let isMounted = true;
-    async function fetchHelpers() {
-      setIsLoadingDropdowns(true);
-      try {
-        const [orgRes, regRes, progRes] = await Promise.all([
-          LmsAuthService.getPublicOrganization(),
-          LmsAuthService.getAvailableRegions(),
-          LmsAuthService.getAvailablePrograms(),
-        ]);
-
-        if (isMounted) {
-          if (orgRes.success && orgRes.data?.slug) {
-            setOrganizationCode(orgRes.data.slug);
-          }
-          if (regRes.success && regRes.data && regRes.data.length > 0) {
-            setRegions(regRes.data);
-            setRegionId(regRes.data[0].id);
-          }
-          if (progRes.success && progRes.data && progRes.data.length > 0) {
-            setPrograms(progRes.data);
-            setInterestedCourse(progRes.data[0].id);
-          }
-        }
-      } catch (err) {
-        console.warn('[StudentRegister] Dropdown loading warning:', err);
-      } finally {
-        if (isMounted) setIsLoadingDropdowns(false);
-      }
-    }
-
-    fetchHelpers();
-    return () => {
-      isMounted = false;
-    };
+  const clearFieldError = useCallback((fieldKey: string) => {
+    setErrors((prev) => {
+      if (!prev[fieldKey]) return prev;
+      const next = { ...prev };
+      delete next[fieldKey];
+      return next;
+    });
   }, []);
 
-  // Pick Document and upload via POST /upload/public?folder=profiles
-  const handlePickDocument = async (key: DocKey) => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*', 'application/pdf'],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      const file = result.assets[0];
-
-      // File size limit: 5MB
-      const MAX_SIZE = 5 * 1024 * 1024;
-      if (file.size && file.size > MAX_SIZE) {
-        Alert.alert(
-          'File Limit Exceeded',
-          `The selected file is ${(file.size / (1024 * 1024)).toFixed(2)} MB. The maximum allowed size is 5MB.`
-        );
-        return;
-      }
-
-      setUploadingDocKey(key);
-
-      const res = await LmsAuthService.uploadVerificationDocument({
-        uri: file.uri,
-        name: file.name,
-        mimeType: file.mimeType,
-        size: file.size,
-      });
-
-      if (res.success && res.data) {
-        setUploadedDocs((prev) => ({
-          ...prev,
-          [key]: res.data,
-        }));
-      } else {
-        Alert.alert('Upload Failed', res.error || 'Unable to upload file.');
-      }
-    } catch (err: unknown) {
-      Alert.alert('Picker Error', err instanceof Error ? err.message : 'Error picking document');
-    } finally {
-      setUploadingDocKey(null);
+  const loadFormQuestions = useCallback(async (forceRefresh = false) => {
+    setQuestionsLoading(true);
+    setQuestionsError(null);
+    const res = await LmsAuthService.getRegistrationFormQuestions({ forceRefresh });
+    if (res.success && res.data) {
+      setFormQuestions(res.data);
+    } else {
+      setFormQuestions([]);
+      setQuestionsError(res.error || 'Failed to load admission form questions.');
     }
-  };
+    setQuestionsLoading(false);
+  }, []);
 
-  const handleRemoveDoc = (key: DocKey) => {
-    setUploadedDocs((prev) => ({
-      ...prev,
-      [key]: undefined,
-    }));
-  };
+  const loadOrganizationCatalog = useCallback(
+    async (slugToLoad: string, options?: { forceRefresh?: boolean; clearDependent?: boolean }) => {
+      const cleanSlug = slugToLoad.trim();
+      if (!cleanSlug) {
+        setOrgError('Organization Code is required.');
+        return;
+      }
 
-  // Validation
-  const validate = (): boolean => {
-    const errs: Record<string, string> = {};
+      if (options?.clearDependent) {
+        setRegionId('');
+        setRegionPlans([]);
+        setDynamicAnswers((prev) => {
+          if (!prev.interestedCourse) return prev;
+          const next = { ...prev };
+          delete next.interestedCourse;
+          return next;
+        });
+      }
 
-    if (!ataStatus) errs.ataStatus = 'Accreditation / Track is required';
-    if (!regionId) errs.regionId = 'Region is required';
-    if (!fullName.trim()) errs.fullName = 'Full Name is required';
+      setOrgLoading(true);
+      setOrgError(null);
+      setRegionsLoading(true);
+      setRegionsError(null);
+      setProgramsLoading(true);
+      setProgramsError(null);
+
+      const orgRes = await LmsAuthService.getPublicOrganization(cleanSlug, {
+        forceRefresh: options?.forceRefresh,
+      });
+
+      if (!orgRes.success || !orgRes.data) {
+        setOrgInfo(null);
+        setVerifiedSlug('');
+        setOrgError(orgRes.error || `Organization "${cleanSlug}" not found.`);
+        setOrgLoading(false);
+        setRegions([]);
+        setRegionsError('Verify a valid organization code first.');
+        setRegionsLoading(false);
+        setPrograms([]);
+        setProgramsError('Verify a valid organization code first.');
+        setProgramsLoading(false);
+        return;
+      }
+
+      const resolvedSlug = orgRes.data.slug || cleanSlug;
+      setOrgInfo(orgRes.data);
+      setOrganizationCode(resolvedSlug);
+      setVerifiedSlug(resolvedSlug);
+      setOrgLoading(false);
+      clearFieldError('organizationCode');
+
+      const [regionsRes, programsRes] = await Promise.all([
+        LmsAuthService.getAvailableRegions(resolvedSlug, { forceRefresh: options?.forceRefresh }),
+        LmsAuthService.getAvailablePrograms(resolvedSlug, { forceRefresh: options?.forceRefresh }),
+      ]);
+
+      if (regionsRes.success && regionsRes.data) {
+        setRegions(regionsRes.data);
+        setRegionsError(null);
+      } else {
+        setRegions([]);
+        setRegionsError(regionsRes.error || 'Could not load study regions.');
+      }
+      setRegionsLoading(false);
+
+      if (programsRes.success && programsRes.data) {
+        setPrograms(programsRes.data);
+        setProgramsError(null);
+      } else {
+        setPrograms([]);
+        setProgramsError(programsRes.error || 'Could not load academic programs.');
+      }
+      setProgramsLoading(false);
+    },
+    [clearFieldError]
+  );
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const paramSlug =
+        (typeof params.organizationCode === 'string' && params.organizationCode.trim()) ||
+        (typeof params.slug === 'string' && params.slug.trim()) ||
+        '';
+      const storedSlug = (await AuthStorage.getOrganizationCode())?.trim() || '';
+      const validStored = storedSlug.toLowerCase() === 'cotr' ? '' : storedSlug;
+      const initialSlug = paramSlug || validStored || ENV.DEFAULT_ORG_SLUG || 'org1';
+
+      if (!active) return;
+      setOrganizationCode(initialSlug);
+
+      await Promise.all([
+        loadOrganizationCatalog(initialSlug),
+        loadFormQuestions(),
+      ]);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [loadFormQuestions, loadOrganizationCatalog, params.organizationCode, params.slug]);
+
+  useEffect(() => {
+    if (!regionId) return;
+    let active = true;
+    (async () => {
+      const res = await LmsAuthService.getPublicSubscriptionPlans(regionId);
+      if (active && res.success && res.data) {
+        setRegionPlans(res.data);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [regionId]);
+
+  const activeRegionPlans = regionId ? regionPlans : [];
+
+  const dynamicSectionQuestions = useMemo(
+    () =>
+      formQuestions.filter(
+        (q) =>
+          q.key !== 'declarationAccepted' &&
+          q.key !== 'countryOfCitizenship' &&
+          q.key !== 'countryLivingIn'
+      ),
+    [formQuestions]
+  );
+
+  const selectedRegionLabel = useMemo(() => {
+    const found = regions.find((r) => r.id === regionId);
+    if (!found) return '';
+    return found.isAta ? `${found.name} (ATA Accredited)` : found.name;
+  }, [regions, regionId]);
+
+  const selectedTrackLabel = useMemo(() => {
+    return TRACK_OPTIONS.find((t) => t.value === ataStatus)?.label || '';
+  }, [ataStatus]);
+
+  const handleDynamicTextChange = useCallback(
+    (question: FormQuestion, rawValue: string) => {
+      const cleanValue = sanitizeDynamicFieldInput(question, rawValue);
+      setDynamicAnswers((prev) => ({ ...prev, [question.key]: cleanValue }));
+      clearFieldError(question.key);
+    },
+    [clearFieldError]
+  );
+
+  const handleDateBlur = useCallback(
+    (question: FormQuestion) => {
+      const current = String(dynamicAnswers[question.key] || '').trim();
+      if (!current) return;
+      const check = validateAndNormalizeDateString(current);
+      if (check.valid && check.normalized) {
+        setDynamicAnswers((prev) => ({ ...prev, [question.key]: check.normalized as string }));
+        clearFieldError(question.key);
+      } else if (check.error) {
+        setErrors((prev) => ({ ...prev, [question.key]: check.error as string }));
+      }
+    },
+    [clearFieldError, dynamicAnswers]
+  );
+
+  const handlePickAndUploadDocument = useCallback(
+    async (docKey: SingleDocKey | 'otherCertificates', imageOnly = false) => {
+      if (uploadingKey) {
+        Alert.alert('Upload In Progress', 'Please wait for the active file upload to finish.');
+        return;
+      }
+
+      try {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: imageOnly
+            ? ['image/jpeg', 'image/png']
+            : ['application/pdf', 'image/jpeg', 'image/png'],
+          copyToCacheDirectory: true,
+          multiple: false,
+        });
+
+        if (result.canceled || !result.assets || result.assets.length === 0) {
+          return;
+        }
+
+        const asset = result.assets[0];
+        setUploadingKey(docKey);
+        setUploadProgress((prev) => ({ ...prev, [docKey]: 0 }));
+        setUploadErrors((prev) => {
+          const next = { ...prev };
+          delete next[docKey];
+          return next;
+        });
+
+        const uploadRes = await LmsAuthService.uploadVerificationDocument(
+          {
+            uri: asset.uri,
+            name: asset.name || `${docKey}.jpg`,
+            mimeType: asset.mimeType,
+            size: asset.size,
+          },
+          (pct) => {
+            setUploadProgress((prev) => ({ ...prev, [docKey]: pct }));
+          },
+          { imageOnly, folder: 'profiles' }
+        );
+
+        if (uploadRes.success && uploadRes.data?.url) {
+          const uploadedItem: DocumentItem = {
+            url: uploadRes.data.url,
+            name: uploadRes.data.name || asset.name || 'Document',
+            size: uploadRes.data.size ?? asset.size ?? 0,
+          };
+
+          if (docKey === 'otherCertificates') {
+            setDocuments((prev) => ({
+              ...prev,
+              otherCertificates: [...(prev.otherCertificates || []), uploadedItem],
+            }));
+          } else {
+            setDocuments((prev) => ({
+              ...prev,
+              [docKey]: uploadedItem,
+            }));
+            clearFieldError(docKey);
+          }
+        } else {
+          const errMsg = uploadRes.error || 'Upload failed. Please check file type and size.';
+          setUploadErrors((prev) => ({ ...prev, [docKey]: errMsg }));
+          Alert.alert('Upload Failed', errMsg);
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Unable to access document picker.';
+        setUploadErrors((prev) => ({ ...prev, [docKey]: msg }));
+        Alert.alert('Upload Error', msg);
+      } finally {
+        setUploadingKey(null);
+      }
+    },
+    [clearFieldError, uploadingKey]
+  );
+
+  const handleRemoveSingleDocument = useCallback((docKey: SingleDocKey) => {
+    setDocuments((prev) => ({ ...prev, [docKey]: undefined }));
+    setUploadErrors((prev) => {
+      const next = { ...prev };
+      delete next[docKey];
+      return next;
+    });
+  }, []);
+
+  const handleRemoveOtherCertificate = useCallback((index: number) => {
+    setDocuments((prev) => {
+      const nextList = [...(prev.otherCertificates || [])];
+      nextList.splice(index, 1);
+      return { ...prev, otherCertificates: nextList };
+    });
+  }, []);
+
+  const handleVerifyOrganization = useCallback(async () => {
+    const clean = organizationCode.trim();
+    const hasChanged = clean.toLowerCase() !== verifiedSlug.toLowerCase();
+    await loadOrganizationCatalog(clean, {
+      forceRefresh: true,
+      clearDependent: hasChanged,
+    });
+  }, [loadOrganizationCatalog, organizationCode, verifiedSlug]);
+
+  const validateAllFields = useCallback((): Record<string, string> => {
+    const validationErrors: Record<string, string> = {};
+
+    if (!organizationCode.trim()) {
+      validationErrors.organizationCode = 'Organization Code is required.';
+    } else if (orgError || (verifiedSlug && verifiedSlug.toLowerCase() !== organizationCode.trim().toLowerCase())) {
+      validationErrors.organizationCode = 'Verify a valid Organization Code before submitting.';
+    }
+
+    if (!ataStatus) {
+      validationErrors.ataStatus = 'Please select ATA or Non-ATA Track.';
+    }
+    if (!regionId) {
+      validationErrors.regionId = 'Please select a Region.';
+    }
+    if (!fullName.trim()) {
+      validationErrors.fullName = 'Full Name is required.';
+    }
     if (!email.trim()) {
-      errs.email = 'Email Address is required';
-    } else if (!/\S+@\S+\.\S+/.test(email.trim())) {
-      errs.email = 'Please enter a valid email address';
+      validationErrors.email = 'Email Address is required.';
+    } else if (!/^[\w.-]+@[\w.-]+\.[A-Za-z]{2,}$/.test(email.trim())) {
+      validationErrors.email = 'Please enter a valid email address.';
     }
 
     if (!mobile.trim()) {
-      errs.mobile = 'Mobile Number is required';
-    } else if (!/^\+?[0-9]{10,14}$/.test(mobile.replace(/[\s-]/g, ''))) {
-      errs.mobile = 'Enter a valid mobile number';
+      validationErrors.mobile = 'Mobile Number is required.';
+    } else if (mobile.trim().length < 8) {
+      validationErrors.mobile = 'Please enter a valid mobile number (at least 8 characters).';
     }
 
     if (!password) {
-      errs.password = 'Temporary password is required';
+      validationErrors.password = 'Temporary Password is required.';
     } else if (password.length < 8) {
-      errs.password = 'Password must be at least 8 characters';
+      validationErrors.password = 'Password must be at least 8 characters long.';
     }
 
-    if (!gender) errs.gender = 'Gender is required';
-    if (!maritalStatus) errs.maritalStatus = 'Marital Status is required';
-    if (!dateOfBirth.trim()) errs.dateOfBirth = 'Date of birth is required';
-    if (!motherTongue.trim()) errs.motherTongue = 'Mother tongue is required';
-    if (!bornAgainDate.trim()) errs.bornAgainDate = 'Born again date is required';
-    if (!churchDenomination.trim()) errs.churchDenomination = 'Church denomination is required';
-    if (!localChurch.trim()) errs.localChurch = 'Local church/assembly is required';
-    if (!churchDetails.trim()) errs.churchDetails = 'Local church details with pastor contact required';
-    if (!referenceProvider.trim()) errs.referenceProvider = 'Reference provider is required';
-    if (!parentName.trim()) errs.parentName = "Parent's name is required";
-    if (!parentPhone.trim()) errs.parentPhone = "Parent's phone is required";
+    dynamicSectionQuestions.forEach((q) => {
+      const rawVal = dynamicAnswers[q.key];
+      const strVal = typeof rawVal === 'string' ? rawVal.trim() : '';
 
-    if (!highestEducation.trim()) errs.highestEducation = 'Highest education is required';
-    if (!interestedCourse) errs.interestedCourse = 'Interested program is required';
+      if (q.isRequired) {
+        if (q.type === 'CHECKBOX') {
+          if (!rawVal) {
+            validationErrors[q.key] = `${q.label || q.key} is required.`;
+          }
+        } else if (!strVal) {
+          validationErrors[q.key] = `${q.label || q.key} is required.`;
+        }
+      }
 
-    // Required Documents
-    if (!uploadedDocs.photo) errs.photo = 'Passport photograph is required';
-    if (!uploadedDocs.aadhaarFront) errs.aadhaarFront = 'National ID / Aadhaar front is required';
-    if (!uploadedDocs.tenthCert) errs.tenthCert = '10th / SSC certificate is required';
-    if (!uploadedDocs.interCert) errs.interCert = '12th / Intermediate certificate is required';
-    if (!uploadedDocs.referenceLetter) errs.referenceLetter = 'Pastor reference letter is required';
+      if (q.type === 'DATE' && strVal) {
+        const dateCheck = validateAndNormalizeDateString(strVal);
+        if (!dateCheck.valid && dateCheck.error) {
+          validationErrors[q.key] = dateCheck.error;
+        }
+      }
+    });
+
+    REQUIRED_DOC_FIELDS.forEach((field) => {
+      if (!documents[field.key]?.url) {
+        validationErrors[field.key] = `${field.label} is required.`;
+      }
+    });
 
     if (!declarationAccepted) {
-      errs.declaration = 'You must agree to the Student Declaration to proceed.';
+      validationErrors.declarationAccepted = 'You must accept the student declaration to proceed.';
     }
 
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
+    return validationErrors;
+  }, [
+    ataStatus,
+    declarationAccepted,
+    documents,
+    dynamicAnswers,
+    dynamicSectionQuestions,
+    email,
+    fullName,
+    mobile,
+    orgError,
+    organizationCode,
+    password,
+    regionId,
+    verifiedSlug,
+  ]);
 
-  const handleRegister = async () => {
-    if (!validate()) {
-      Alert.alert(
-        'Incomplete Application',
-        'Please review the highlighted fields and ensure required documents are attached.'
-      );
+  const handleSubmitRegistration = useCallback(async () => {
+    if (submitLockRef.current || isSubmitting) return;
+    if (uploadingKey) {
+      Alert.alert('Upload In Progress', 'Wait for file uploads to complete before submitting.');
       return;
     }
 
+    setSubmitErrorBanner(null);
+    const validationErrors = validateAllFields();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      setSubmitErrorBanner('Please fix the highlighted required fields below.');
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+
+    setErrors({});
+    submitLockRef.current = true;
     setIsSubmitting(true);
 
-    const documentsPayload: StudentDocuments = {
-      photo: uploadedDocs.photo,
-      aadhaarFront: uploadedDocs.aadhaarFront,
-      aadhaarBack: uploadedDocs.aadhaarBack,
-      tenthCert: uploadedDocs.tenthCert,
-      interCert: uploadedDocs.interCert,
-      degreeCert: uploadedDocs.degreeCert,
-      degreeTranscript: uploadedDocs.degreeTranscript,
-      referenceLetter: uploadedDocs.referenceLetter,
-      otherCertificates: uploadedDocs.otherCertificates ? [uploadedDocs.otherCertificates] : [],
-    };
-
-    const payload: StudentRegistrationPayload = {
-      fullName: fullName.trim(),
-      email: email.trim(),
-      password,
-      mobile: mobile.trim(),
-      organizationCode: organizationCode.trim(),
-      regionId,
-      ataStatus: ataStatus || 'ATA',
-      customProfile: {
-        ataStatus: ataStatus || 'ATA',
-        countryOfCitizenship: countryOfCitizenship.trim() || 'India',
-        countryLivingIn: countryLivingIn.trim() || 'India',
-        gender,
-        dateOfBirth: dateOfBirth.trim(),
-        maritalStatus,
-        motherTongue: motherTongue.trim(),
-        otherLanguages: otherLanguages.trim() || undefined,
-        address: address.trim() || 'Address as per ID',
-        city: city.trim() || 'City',
-        state: stateName.trim() || 'State',
-        pincode: pincode.trim() || undefined,
-        currentProfession: currentProfession.trim() || undefined,
-        highestEducation: highestEducation.trim(),
-        theologicalQualifications: theologicalQualifications.trim() || undefined,
-        interestedCourse,
-        bornAgainDate: bornAgainDate.trim(),
-        denomination: churchDenomination.trim(),
-        localChurch: localChurch.trim(),
-        churchDetails: churchDetails.trim(),
-        pastorName: churchDetails.trim(),
-        pastorContact: churchDetails.trim(),
-        referenceProvider: referenceProvider.trim(),
-        parentName: parentName.trim(),
-        parentPhone: parentPhone.trim(),
-        specialHonors: specialHonors.trim() || undefined,
-        documents: documentsPayload,
-        declarationAccepted: true,
-      },
-    };
-
     try {
-      const response = await LmsAuthService.registerStudent(payload);
+      const payload = buildStudentRegistrationPayload({
+        fullName,
+        email,
+        password,
+        mobile,
+        organizationCode,
+        regionId,
+        ataStatus,
+        countryOfCitizenship,
+        countryLivingIn,
+        dynamicAnswers,
+        formQuestions,
+        documents,
+        declarationAccepted,
+      });
 
-      if (response.success) {
-        const assignedOrgCode = response.data?.organizationCode || organizationCode || 'org1';
-        await AuthStorage.setOrganizationCode(assignedOrgCode);
-
-        // Pre-save basic applicant session
-        await AuthStorage.saveSession({
-          accessToken: 'student_token_' + Date.now(),
-          role: 'student',
-          user: {
-            id: 'student_' + Date.now(),
-            fullName: fullName.trim() || 'Student',
-            email: email.trim(),
-            mobile: mobile.trim(),
-            role: 'STUDENT',
-          },
+      const res = await LmsAuthService.registerStudent(payload);
+      if (res.success) {
+        setSubmittedState({
+          message:
+            res.data?.message ||
+            'Your admission application has been submitted and is awaiting admin review and approval.',
+          organizationName: orgInfo?.name || organizationCode.trim(),
+          trackLabel:
+            ataStatus === 'ATA' ? 'ATA (Asia Theological Association)' : 'NON-ATA',
         });
-
-        Alert.alert(
-          'Registration Successful! 🎉',
-          `Your enrollment application has been submitted to Cotr Global Online.\n\nOrganization Code: ${assignedOrgCode}\nRegistered Email: ${email.trim()}\n\nPlease sign in using this Organization Code and your password.`,
-          [
-            {
-              text: 'Go to Sign In',
-              onPress: () =>
-                router.replace({
-                  pathname: '/student/login',
-                  params: { organizationCode: assignedOrgCode, email: email.trim() },
-                }),
-            },
-            {
-              text: 'Open Dashboard',
-              onPress: () => router.replace('/(student-tabs)/dashboard'),
-            },
-          ]
-        );
       } else {
-        Alert.alert('Registration Error', response.error || 'Server rejected registration request.');
+        const errMsg = res.error || 'Registration failed. Please verify your details.';
+        setSubmitErrorBanner(errMsg);
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       }
-    } catch (err: unknown) {
-      Alert.alert('Network Error', err instanceof Error ? err.message : 'Registration failed');
     } finally {
       setIsSubmitting(false);
+      submitLockRef.current = false;
     }
-  };
+  }, [
+    ataStatus,
+    countryLivingIn,
+    countryOfCitizenship,
+    declarationAccepted,
+    documents,
+    dynamicAnswers,
+    email,
+    formQuestions,
+    fullName,
+    isSubmitting,
+    mobile,
+    orgInfo?.name,
+    organizationCode,
+    password,
+    regionId,
+    uploadingKey,
+    validateAllFields,
+  ]);
 
-  const selectedRegionName =
-    regions.find((r) => r.id === regionId)?.name || '-- Select Region --';
+  const orgLogoUri = useMemo(() => resolveBackendMediaUrl(orgInfo?.logoUrl), [orgInfo?.logoUrl]);
+  const photoPreviewUri = useMemo(
+    () => resolveBackendMediaUrl(documents.photo?.url),
+    [documents.photo?.url]
+  );
 
-  const selectedProgramName =
-    programs.find((p) => p.id === interestedCourse)?.name || '-- Select Program --';
-
-  const selectedTrackName =
-    trackOptions.find((t) => t.value === ataStatus)?.label || '-- Select Track --';
+  if (submittedState) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style={isDarkMode ? 'light' : 'dark'} />
+        <ScrollView contentContainerStyle={styles.confirmationScroll}>
+          <View style={styles.confirmationCard}>
+            <View style={styles.confirmationIconCircle}>
+              <Ionicons name="checkmark-circle" size={56} color="#059669" />
+            </View>
+            <Text style={styles.confirmationTitle}>Application Received!</Text>
+            <Text style={styles.confirmationSubtitle}>{submittedState.organizationName}</Text>
+            <Text style={styles.confirmationBody}>
+              Your admission application has been registered under the{' '}
+              <Text style={styles.confirmationBold}>{submittedState.trackLabel}</Text> track.
+            </Text>
+            <View style={styles.confirmationNoticeBox}>
+              <Ionicons name="time-outline" size={20} color="#0369A1" />
+              <Text style={styles.confirmationNoticeText}>
+                {submittedState.message} You will be able to sign in once administration approves your application.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.submitButton}
+              activeOpacity={0.85}
+              onPress={() =>
+                router.replace({
+                  pathname: '/student/login',
+                  params: { organizationCode: organizationCode.trim() },
+                })
+              }
+            >
+              <Text style={styles.submitButtonText}>Go to Sign In</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Navigation Bar */}
+          {/* Top Navigation & Institution Branding */}
           <View style={styles.navBar}>
             <TouchableOpacity
               style={styles.navBackBtn}
               onPress={() => router.back()}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Go back"
             >
-              <Ionicons name="arrow-back" size={20} color="#1E293B" />
+              <Ionicons name="arrow-back" size={20} color={isDarkMode ? '#F8FAFC' : '#1E293B'} />
             </TouchableOpacity>
+            {orgLoading ? (
+              <ActivityIndicator size="small" color="#2563EB" />
+            ) : orgInfo ? (
+              <View style={styles.orgBadge}>
+                {orgLogoUri ? (
+                  <Image source={{ uri: orgLogoUri }} style={styles.orgLogo} resizeMode="contain" />
+                ) : (
+                  <Ionicons name="school" size={16} color="#2563EB" />
+                )}
+                <Text style={styles.orgBadgeText} numberOfLines={1}>
+                  {orgInfo.name}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
-          {/* Form Page Header */}
           <View style={styles.pageHeader}>
             <Text style={styles.pageTitle}>Student Enrollment Application</Text>
             <Text style={styles.pageSubtitle}>
-              Fill in all required details below to complete your admission registration.
+              Complete all required admission fields and upload clear scanned documents.
             </Text>
           </View>
 
-          {/* SECTION 1: Admission Track & Personal Details */}
+          {submitErrorBanner ? (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle" size={18} color="#DC2626" />
+              <Text style={styles.errorBannerText}>{submitErrorBanner}</Text>
+            </View>
+          ) : null}
+
           <View style={styles.cardContainer}>
+            {/* SECTION 1: Admission Track & Personal Details */}
             <View style={styles.sectionTitleRow}>
-              <Ionicons name="shield-checkmark-outline" size={20} color="#0284C7" style={{ marginRight: 8 }} />
+              <Ionicons name="person-circle-outline" size={20} color="#4F46E5" />
               <Text style={styles.sectionTitle}>1. Admission Track & Personal Details</Text>
             </View>
 
-            {/* ACCREDITATION / TRACK */}
+            {/* Organization Code with Verify */}
             <View style={styles.fieldGroup}>
               <Text style={styles.inputLabel}>
-                ACCREDITATION / TRACK <Text style={styles.asterisk}>*</Text>
+                Organization Code <Text style={styles.reqStar}>*</Text>
+              </Text>
+              <View style={styles.orgInputRow}>
+                <TextInput
+                  style={[
+                    styles.textInput,
+                    styles.orgCodeInput,
+                    (errors.organizationCode || orgError) && styles.inputErrorBorder,
+                  ]}
+                  value={organizationCode}
+                  onChangeText={(text) => {
+                    setOrganizationCode(text);
+                    clearFieldError('organizationCode');
+                    setOrgError(null);
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="e.g. org1"
+                  placeholderTextColor="#94A3B8"
+                />
+                <TouchableOpacity
+                  style={styles.verifyBtn}
+                  onPress={handleVerifyOrganization}
+                  disabled={orgLoading}
+                >
+                  {orgLoading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.verifyBtnText}>Verify</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+              {orgError ? (
+                <Text style={styles.errorText}>{orgError}</Text>
+              ) : errors.organizationCode ? (
+                <Text style={styles.errorText}>{errors.organizationCode}</Text>
+              ) : orgInfo ? (
+                <Text style={styles.helperSuccessText}>
+                  Verified institution: {orgInfo.name} ({orgInfo.slug})
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Accreditation Track */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.inputLabel}>
+                Accreditation / Track <Text style={styles.reqStar}>*</Text>
               </Text>
               <TouchableOpacity
-                style={[styles.dropdownInput, Boolean(errors.ataStatus) && styles.inputErrorBorder]}
-                onPress={() => setModalType('track')}
+                style={[styles.dropdownInput, errors.ataStatus && styles.inputErrorBorder]}
+                onPress={() => setActiveModal({ type: 'track', title: 'Select Accreditation Track' })}
               >
-                <Text style={ataStatus ? styles.dropdownTextFilled : styles.dropdownTextPlaceholder}>
-                  {selectedTrackName}
+                <Text style={selectedTrackLabel ? styles.dropdownTextFilled : styles.dropdownPlaceholder}>
+                  {selectedTrackLabel || '-- Select Track --'}
                 </Text>
                 <Ionicons name="chevron-down" size={18} color="#64748B" />
               </TouchableOpacity>
               {errors.ataStatus ? <Text style={styles.errorText}>{errors.ataStatus}</Text> : null}
             </View>
 
-            {/* REGION */}
+            {/* Region */}
             <View style={styles.fieldGroup}>
               <Text style={styles.inputLabel}>
-                REGION <Text style={styles.asterisk}>*</Text>
+                Region <Text style={styles.reqStar}>*</Text>
               </Text>
-              <TouchableOpacity
-                style={[styles.dropdownInput, Boolean(errors.regionId) && styles.inputErrorBorder]}
-                onPress={() => setModalType('region')}
-              >
-                <Text
-                  style={regionId ? styles.dropdownTextFilled : styles.dropdownTextPlaceholder}
-                  numberOfLines={1}
+              {regionsLoading ? (
+                <View style={styles.inlineLoadingBox}>
+                  <ActivityIndicator size="small" color="#4F46E5" />
+                  <Text style={styles.inlineStatusText}>Loading regions...</Text>
+                </View>
+              ) : regionsError ? (
+                <View style={styles.inlineErrorBox}>
+                  <Text style={styles.errorTextInline}>{regionsError}</Text>
+                  <TouchableOpacity
+                    onPress={() =>
+                      loadOrganizationCatalog(organizationCode, { forceRefresh: true })
+                    }
+                  >
+                    <Text style={styles.retryLink}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.dropdownInput, errors.regionId && styles.inputErrorBorder]}
+                  onPress={() => setActiveModal({ type: 'region', title: 'Select Study Region' })}
+                  disabled={regions.length === 0}
                 >
-                  {isLoadingDropdowns ? 'Loading regions...' : selectedRegionName}
-                </Text>
-                <Ionicons name="chevron-down" size={18} color="#64748B" />
-              </TouchableOpacity>
+                  <Text style={selectedRegionLabel ? styles.dropdownTextFilled : styles.dropdownPlaceholder}>
+                    {regions.length === 0
+                      ? 'No regions configured for this organization'
+                      : selectedRegionLabel || '-- Select Region --'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={18} color="#64748B" />
+                </TouchableOpacity>
+              )}
               {errors.regionId ? <Text style={styles.errorText}>{errors.regionId}</Text> : null}
+              {activeRegionPlans.length > 0 ? (
+                <Text style={styles.planHintText}>
+                  {activeRegionPlans.length} regional tuition/subscription plan(s) available for this region.
+                </Text>
+              ) : null}
             </View>
 
-            {/* FULL NAME */}
+            {/* Full Name */}
             <View style={styles.fieldGroup}>
               <Text style={styles.inputLabel}>
-                FULL NAME <Text style={styles.asterisk}>*</Text>
+                Full Name <Text style={styles.reqStar}>*</Text>
               </Text>
-              <RNTextInput
-                style={[styles.textInput, Boolean(errors.fullName) && styles.inputErrorBorder]}
+              <TextInput
+                style={[styles.textInput, errors.fullName && styles.inputErrorBorder]}
+                value={fullName}
+                onChangeText={(text) => {
+                  setFullName(text);
+                  clearFieldError('fullName');
+                }}
                 placeholder="e.g. John Doe"
                 placeholderTextColor="#94A3B8"
-                value={fullName}
-                onChangeText={setFullName}
               />
               {errors.fullName ? <Text style={styles.errorText}>{errors.fullName}</Text> : null}
             </View>
 
-            {/* EMAIL ADDRESS */}
+            {/* Email */}
             <View style={styles.fieldGroup}>
               <Text style={styles.inputLabel}>
-                EMAIL ADDRESS <Text style={styles.asterisk}>*</Text>
+                Email Address <Text style={styles.reqStar}>*</Text>
               </Text>
-              <RNTextInput
-                style={[styles.textInput, Boolean(errors.email) && styles.inputErrorBorder]}
-                placeholder="john@example.com"
-                placeholderTextColor="#94A3B8"
+              <TextInput
+                style={[styles.textInput, errors.email && styles.inputErrorBorder]}
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  clearFieldError('email');
+                }}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
+                autoCorrect={false}
+                placeholder="john@example.com"
+                placeholderTextColor="#94A3B8"
               />
               {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
             </View>
 
-            {/* MOBILE NUMBER */}
+            {/* Mobile Number */}
             <View style={styles.fieldGroup}>
               <Text style={styles.inputLabel}>
-                MOBILE NUMBER <Text style={styles.asterisk}>*</Text>
+                Mobile Number <Text style={styles.reqStar}>*</Text>
               </Text>
-              <RNTextInput
-                style={[styles.textInput, Boolean(errors.mobile) && styles.inputErrorBorder]}
+              <TextInput
+                style={[styles.textInput, errors.mobile && styles.inputErrorBorder]}
+                value={mobile}
+                onChangeText={(text) => {
+                  setMobile(text.replace(/[^0-9()+\- ]/g, ''));
+                  clearFieldError('mobile');
+                }}
+                keyboardType="phone-pad"
                 placeholder="+91 98765 43210"
                 placeholderTextColor="#94A3B8"
-                keyboardType="phone-pad"
-                value={mobile}
-                onChangeText={setMobile}
               />
               {errors.mobile ? <Text style={styles.errorText}>{errors.mobile}</Text> : null}
             </View>
 
-            {/* ORGANIZATION CODE */}
+            {/* Temporary Password */}
             <View style={styles.fieldGroup}>
               <Text style={styles.inputLabel}>
-                ORGANIZATION CODE <Text style={styles.asterisk}>*</Text>
+                Temporary Password <Text style={styles.reqStar}>*</Text>
               </Text>
-              <RNTextInput
-                style={[styles.textInput, styles.readOnlyInput]}
-                value={organizationCode}
-                editable={false}
-              />
-            </View>
-
-            {/* TEMPORARY PASSWORD */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>
-                TEMPORARY PASSWORD <Text style={styles.asterisk}>*</Text>
-              </Text>
-              <View
-                style={[
-                  styles.passwordInputWrap,
-                  Boolean(errors.password) && styles.inputErrorBorder,
-                ]}
-              >
-                <RNTextInput
+              <View style={[styles.passwordInputWrap, errors.password && styles.inputErrorBorder]}>
+                <TextInput
                   style={styles.passwordInput}
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    clearFieldError('password');
+                  }}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
                   placeholder="Min. 8 characters"
                   placeholderTextColor="#94A3B8"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
                 />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
+                <TouchableOpacity onPress={() => setShowPassword((prev) => !prev)}>
                   <Ionicons
                     name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                     size={20}
@@ -611,453 +916,416 @@ export default function StudentRegisterScreen() {
               </View>
               {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
             </View>
-          </View>
 
-          {/* SECTION 2: Residence & Background Details */}
-          <View style={styles.cardContainer}>
-            <View style={styles.sectionTitleRow}>
+            {/* SECTION 2: Residence & Dynamic Background Questions */}
+            <View style={[styles.sectionTitleRow, styles.sectionDividerTop]}>
+              <Ionicons name="globe-outline" size={20} color="#4F46E5" />
               <Text style={styles.sectionTitle}>2. Residence & Background Details</Text>
             </View>
 
-            {/* COUNTRY OF CITIZENSHIP */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>COUNTRY OF CITIZENSHIP</Text>
-              <RNTextInput
-                style={styles.textInput}
+              <Text style={styles.inputLabel}>Country of Citizenship</Text>
+              <TextInput
+                style={[styles.textInput, errors.countryOfCitizenship && styles.inputErrorBorder]}
+                value={countryOfCitizenship}
+                onChangeText={(text) => {
+                  setCountryOfCitizenship(text);
+                  clearFieldError('countryOfCitizenship');
+                }}
                 placeholder="e.g. India"
                 placeholderTextColor="#94A3B8"
-                value={countryOfCitizenship}
-                onChangeText={setCountryOfCitizenship}
               />
             </View>
 
-            {/* COUNTRY LIVING IN (CURRENT RESIDENCE) */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>COUNTRY LIVING IN (CURRENT RESIDENCE)</Text>
-              <RNTextInput
-                style={styles.textInput}
+              <Text style={styles.inputLabel}>Country Living In (Current Residence)</Text>
+              <TextInput
+                style={[styles.textInput, errors.countryLivingIn && styles.inputErrorBorder]}
+                value={countryLivingIn}
+                onChangeText={(text) => {
+                  setCountryLivingIn(text);
+                  clearFieldError('countryLivingIn');
+                }}
                 placeholder="e.g. India, UAE, USA"
                 placeholderTextColor="#94A3B8"
-                value={countryLivingIn}
-                onChangeText={setCountryLivingIn}
               />
             </View>
 
-            {/* GENDER */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>
-                GENDER <Text style={styles.asterisk}>*</Text>
-              </Text>
-              <TouchableOpacity
-                style={[styles.dropdownInput, Boolean(errors.gender) && styles.inputErrorBorder]}
-                onPress={() => setModalType('gender')}
-              >
-                <Text style={gender ? styles.dropdownTextFilled : styles.dropdownTextPlaceholder}>
-                  {gender || 'Select'}
-                </Text>
-                <Ionicons name="chevron-down" size={18} color="#64748B" />
-              </TouchableOpacity>
-              {errors.gender ? <Text style={styles.errorText}>{errors.gender}</Text> : null}
-            </View>
-
-            {/* MARITAL STATUS */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>
-                MARITAL STATUS <Text style={styles.asterisk}>*</Text>
-              </Text>
-              <TouchableOpacity
-                style={[styles.dropdownInput, Boolean(errors.maritalStatus) && styles.inputErrorBorder]}
-                onPress={() => setModalType('marital')}
-              >
-                <Text style={maritalStatus ? styles.dropdownTextFilled : styles.dropdownTextPlaceholder}>
-                  {maritalStatus || 'Select'}
-                </Text>
-                <Ionicons name="chevron-down" size={18} color="#64748B" />
-              </TouchableOpacity>
-              {errors.maritalStatus ? <Text style={styles.errorText}>{errors.maritalStatus}</Text> : null}
-            </View>
-
-            {/* DATE OF BIRTH */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>
-                DATE OF BIRTH <Text style={styles.asterisk}>*</Text>
-              </Text>
-              <RNTextInput
-                style={[styles.textInput, Boolean(errors.dateOfBirth) && styles.inputErrorBorder]}
-                placeholder="dd-mm-yyyy"
-                placeholderTextColor="#94A3B8"
-                value={dateOfBirth}
-                onChangeText={setDateOfBirth}
-              />
-              {errors.dateOfBirth ? <Text style={styles.errorText}>{errors.dateOfBirth}</Text> : null}
-            </View>
-
-            {/* MOTHER TONGUE */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>
-                MOTHER TONGUE <Text style={styles.asterisk}>*</Text>
-              </Text>
-              <RNTextInput
-                style={[styles.textInput, Boolean(errors.motherTongue) && styles.inputErrorBorder]}
-                placeholder=""
-                placeholderTextColor="#94A3B8"
-                value={motherTongue}
-                onChangeText={setMotherTongue}
-              />
-              {errors.motherTongue ? <Text style={styles.errorText}>{errors.motherTongue}</Text> : null}
-            </View>
-
-            {/* OTHER LANGUAGES */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>OTHER LANGUAGES</Text>
-              <RNTextInput
-                style={styles.textInput}
-                placeholder=""
-                placeholderTextColor="#94A3B8"
-                value={otherLanguages}
-                onChangeText={setOtherLanguages}
-              />
-            </View>
-
-            {/* WHEN DID YOU BECOME A BORN-AGAIN CHRISTIAN? */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>
-                WHEN DID YOU BECOME A BORN-AGAIN CHRISTIAN? <Text style={styles.asterisk}>*</Text>
-              </Text>
-              <RNTextInput
-                style={[styles.textInput, Boolean(errors.bornAgainDate) && styles.inputErrorBorder]}
-                placeholder="dd-mm-yyyy"
-                placeholderTextColor="#94A3B8"
-                value={bornAgainDate}
-                onChangeText={setBornAgainDate}
-              />
-              {errors.bornAgainDate ? <Text style={styles.errorText}>{errors.bornAgainDate}</Text> : null}
-            </View>
-
-            {/* CHURCH DENOMINATION */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>
-                CHURCH DENOMINATION <Text style={styles.asterisk}>*</Text>
-              </Text>
-              <RNTextInput
-                style={[styles.textInput, Boolean(errors.churchDenomination) && styles.inputErrorBorder]}
-                placeholder=""
-                placeholderTextColor="#94A3B8"
-                value={churchDenomination}
-                onChangeText={setChurchDenomination}
-              />
-              {errors.churchDenomination ? (
-                <Text style={styles.errorText}>{errors.churchDenomination}</Text>
-              ) : null}
-            </View>
-
-            {/* LOCAL CHURCH/ASSEMBLY */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>
-                LOCAL CHURCH/ASSEMBLY <Text style={styles.asterisk}>*</Text>
-              </Text>
-              <RNTextInput
-                style={[styles.textInput, Boolean(errors.localChurch) && styles.inputErrorBorder]}
-                placeholder=""
-                placeholderTextColor="#94A3B8"
-                value={localChurch}
-                onChangeText={setLocalChurch}
-              />
-              {errors.localChurch ? <Text style={styles.errorText}>{errors.localChurch}</Text> : null}
-            </View>
-
-            {/* LOCAL CHURCH DETAILS (WITH PASTOR CONTACT) */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>
-                LOCAL CHURCH DETAILS (WITH PASTOR CONTACT) <Text style={styles.asterisk}>*</Text>
-              </Text>
-              <RNTextInput
-                style={[styles.textArea, Boolean(errors.churchDetails) && styles.inputErrorBorder]}
-                placeholder=""
-                placeholderTextColor="#94A3B8"
-                multiline
-                numberOfLines={3}
-                value={churchDetails}
-                onChangeText={setChurchDetails}
-              />
-              {errors.churchDetails ? <Text style={styles.errorText}>{errors.churchDetails}</Text> : null}
-            </View>
-
-            {/* REFERENCE PROVIDER */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>
-                REFERENCE PROVIDER <Text style={styles.asterisk}>*</Text>
-              </Text>
-              <RNTextInput
-                style={[styles.textInput, Boolean(errors.referenceProvider) && styles.inputErrorBorder]}
-                placeholder=""
-                placeholderTextColor="#94A3B8"
-                value={referenceProvider}
-                onChangeText={setReferenceProvider}
-              />
-              {errors.referenceProvider ? (
-                <Text style={styles.errorText}>{errors.referenceProvider}</Text>
-              ) : null}
-            </View>
-
-            {/* PARENT'S NAME */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>
-                PARENT&apos;S NAME <Text style={styles.asterisk}>*</Text>
-              </Text>
-              <RNTextInput
-                style={[styles.textInput, Boolean(errors.parentName) && styles.inputErrorBorder]}
-                placeholder=""
-                placeholderTextColor="#94A3B8"
-                value={parentName}
-                onChangeText={setParentName}
-              />
-              {errors.parentName ? <Text style={styles.errorText}>{errors.parentName}</Text> : null}
-            </View>
-
-            {/* PARENT'S PHONE */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>
-                PARENT&apos;S PHONE <Text style={styles.asterisk}>*</Text>
-              </Text>
-              <RNTextInput
-                style={[styles.textInput, Boolean(errors.parentPhone) && styles.inputErrorBorder]}
-                placeholder=""
-                placeholderTextColor="#94A3B8"
-                keyboardType="phone-pad"
-                value={parentPhone}
-                onChangeText={setParentPhone}
-              />
-              {errors.parentPhone ? <Text style={styles.errorText}>{errors.parentPhone}</Text> : null}
-            </View>
-
-            {/* SPECIAL HONORS CONFERRED */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>SPECIAL HONORS CONFERRED</Text>
-              <RNTextInput
-                style={styles.textArea}
-                placeholder=""
-                placeholderTextColor="#94A3B8"
-                multiline
-                numberOfLines={3}
-                value={specialHonors}
-                onChangeText={setSpecialHonors}
-              />
-            </View>
-
-            {/* PERMANENT ADDRESS */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>PERMANENT RESIDENTIAL ADDRESS</Text>
-              <RNTextInput
-                style={styles.textArea}
-                placeholder="Door No, Street Name, Landmark"
-                placeholderTextColor="#94A3B8"
-                multiline
-                numberOfLines={2}
-                value={address}
-                onChangeText={setAddress}
-              />
-            </View>
-
-            <View style={styles.row}>
-              <View style={[styles.col, { marginRight: 10 }]}>
-                <Text style={styles.inputLabel}>CITY</Text>
-                <RNTextInput
-                  style={styles.textInput}
-                  placeholder="City"
-                  placeholderTextColor="#94A3B8"
-                  value={city}
-                  onChangeText={setCity}
-                />
+            {questionsLoading ? (
+              <View style={styles.inlineLoadingBox}>
+                <ActivityIndicator size="small" color="#4F46E5" />
+                <Text style={styles.inlineStatusText}>Loading admission form fields...</Text>
               </View>
-              <View style={styles.col}>
-                <Text style={styles.inputLabel}>STATE</Text>
-                <RNTextInput
-                  style={styles.textInput}
-                  placeholder="State"
-                  placeholderTextColor="#94A3B8"
-                  value={stateName}
-                  onChangeText={setStateName}
-                />
+            ) : questionsError ? (
+              <View style={styles.inlineErrorBox}>
+                <Text style={styles.errorTextInline}>{questionsError}</Text>
+                <TouchableOpacity onPress={() => loadFormQuestions(true)}>
+                  <Text style={styles.retryLink}>Retry</Text>
+                </TouchableOpacity>
               </View>
-            </View>
-          </View>
+            ) : (
+              dynamicSectionQuestions.map((question) => {
+                const value = dynamicAnswers[question.key];
+                const strValue = typeof value === 'string' ? value : '';
+                const errorMsg = errors[question.key];
 
-          {/* SECTION 3: Academic Qualifications & Required Documents */}
-          <View style={styles.cardContainer}>
-            <View style={styles.sectionTitleRow}>
-              <Text style={styles.sectionTitle}>3. Academic Qualifications & Required Documents</Text>
-            </View>
+                if (question.key === 'interestedCourse') {
+                  const selectedProg = programs.find((p) => p.id === strValue);
+                  return (
+                    <View key={question.id || question.key} style={styles.fieldGroup}>
+                      <Text style={styles.inputLabel}>
+                        {question.label}{' '}
+                        {question.isRequired ? <Text style={styles.reqStar}>*</Text> : null}
+                      </Text>
+                      {programsLoading ? (
+                        <View style={styles.inlineLoadingBox}>
+                          <ActivityIndicator size="small" color="#4F46E5" />
+                          <Text style={styles.inlineStatusText}>Loading programs...</Text>
+                        </View>
+                      ) : programsError ? (
+                        <View style={styles.inlineErrorBox}>
+                          <Text style={styles.errorTextInline}>{programsError}</Text>
+                          <TouchableOpacity
+                            onPress={() =>
+                              loadOrganizationCatalog(organizationCode, { forceRefresh: true })
+                            }
+                          >
+                            <Text style={styles.retryLink}>Retry</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          style={[styles.dropdownInput, errorMsg && styles.inputErrorBorder]}
+                          onPress={() =>
+                            setActiveModal({
+                              type: 'program',
+                              title: question.label || 'Select a Program',
+                              key: question.key,
+                            })
+                          }
+                          disabled={programs.length === 0}
+                        >
+                          <Text
+                            style={
+                              selectedProg ? styles.dropdownTextFilled : styles.dropdownPlaceholder
+                            }
+                          >
+                            {programs.length === 0
+                              ? 'No published programs available'
+                              : selectedProg?.name || '-- Select a Program --'}
+                          </Text>
+                          <Ionicons name="chevron-down" size={18} color="#64748B" />
+                        </TouchableOpacity>
+                      )}
+                      {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+                    </View>
+                  );
+                }
 
-            {/* HIGHEST SECULAR EDUCATION */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>
-                HIGHEST SECULAR EDUCATION <Text style={styles.asterisk}>*</Text>
-              </Text>
-              <RNTextInput
-                style={[styles.textInput, Boolean(errors.highestEducation) && styles.inputErrorBorder]}
-                placeholder="e.g. Bachelor of Science (B.Sc)"
-                placeholderTextColor="#94A3B8"
-                value={highestEducation}
-                onChangeText={setHighestEducation}
-              />
-              {errors.highestEducation ? (
-                <Text style={styles.errorText}>{errors.highestEducation}</Text>
-              ) : null}
-            </View>
+                if (question.type === 'DROPDOWN') {
+                  const options =
+                    question.key === 'gender' || /gender/i.test(question.label || '')
+                      ? ['Male', 'Female']
+                      : Array.isArray(question.options)
+                        ? question.options
+                        : [];
 
-            {/* THEOLOGICAL QUALIFICATIONS */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>THEOLOGICAL QUALIFICATIONS</Text>
-              <RNTextInput
-                style={styles.textInput}
-                placeholder="e.g. Diploma in Theology (Dip.Th)"
-                placeholderTextColor="#94A3B8"
-                value={theologicalQualifications}
-                onChangeText={setTheologicalQualifications}
-              />
-            </View>
+                  return (
+                    <View key={question.id || question.key} style={styles.fieldGroup}>
+                      <Text style={styles.inputLabel}>
+                        {question.label}{' '}
+                        {question.isRequired ? <Text style={styles.reqStar}>*</Text> : null}
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.dropdownInput, errorMsg && styles.inputErrorBorder]}
+                        onPress={() =>
+                          setActiveModal({
+                            type: 'dynamic',
+                            title: question.label,
+                            key: question.key,
+                            options,
+                          })
+                        }
+                      >
+                        <Text
+                          style={strValue ? styles.dropdownTextFilled : styles.dropdownPlaceholder}
+                        >
+                          {strValue || '-- Select --'}
+                        </Text>
+                        <Ionicons name="chevron-down" size={18} color="#64748B" />
+                      </TouchableOpacity>
+                      {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+                    </View>
+                  );
+                }
 
-            {/* INTERESTED PROGRAM / COURSE */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.inputLabel}>
-                INTERESTED PROGRAM / COURSE <Text style={styles.asterisk}>*</Text>
-              </Text>
-              <TouchableOpacity
-                style={[styles.dropdownInput, Boolean(errors.interestedCourse) && styles.inputErrorBorder]}
-                onPress={() => setModalType('program')}
-              >
-                <Text
-                  style={interestedCourse ? styles.dropdownTextFilled : styles.dropdownTextPlaceholder}
-                  numberOfLines={1}
-                >
-                  {isLoadingDropdowns ? 'Loading programs...' : selectedProgramName}
-                </Text>
-                <Ionicons name="chevron-down" size={18} color="#64748B" />
-              </TouchableOpacity>
-              {errors.interestedCourse ? (
-                <Text style={styles.errorText}>{errors.interestedCourse}</Text>
-              ) : null}
-            </View>
+                if (question.type === 'CHECKBOX') {
+                  const checked = Boolean(value);
+                  return (
+                    <View key={question.id || question.key} style={styles.fieldGroup}>
+                      <TouchableOpacity
+                        style={styles.inlineCheckRow}
+                        onPress={() => {
+                          setDynamicAnswers((prev) => ({ ...prev, [question.key]: !checked }));
+                          clearFieldError(question.key);
+                        }}
+                      >
+                        <View style={[styles.checkboxSquare, checked && styles.checkboxChecked]}>
+                          {checked ? <Ionicons name="checkmark" size={14} color="#FFFFFF" /> : null}
+                        </View>
+                        <Text style={styles.inlineCheckLabel}>
+                          {question.label}{' '}
+                          {question.isRequired ? <Text style={styles.reqStar}>*</Text> : null}
+                        </Text>
+                      </TouchableOpacity>
+                      {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+                    </View>
+                  );
+                }
 
-            {/* Upload fields */}
-            <Text style={[styles.sectionSubTitle, { marginTop: 12, marginBottom: 12 }]}>
-              DOCUMENT ATTACHMENTS (MAX 5MB EACH)
+                if (question.type === 'TEXTAREA') {
+                  return (
+                    <View key={question.id || question.key} style={styles.fieldGroup}>
+                      <Text style={styles.inputLabel}>
+                        {question.label}{' '}
+                        {question.isRequired ? <Text style={styles.reqStar}>*</Text> : null}
+                      </Text>
+                      <TextInput
+                        style={[styles.textArea, errorMsg && styles.inputErrorBorder]}
+                        value={strValue}
+                        onChangeText={(text) => handleDynamicTextChange(question, text)}
+                        multiline
+                        numberOfLines={3}
+                        textAlignVertical="top"
+                        placeholder={question.placeholder || `Enter ${question.label.toLowerCase()}`}
+                        placeholderTextColor="#94A3B8"
+                      />
+                      {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+                    </View>
+                  );
+                }
+
+                if (question.type === 'DATE') {
+                  return (
+                    <View key={question.id || question.key} style={styles.fieldGroup}>
+                      <Text style={styles.inputLabel}>
+                        {question.label}{' '}
+                        {question.isRequired ? <Text style={styles.reqStar}>*</Text> : null}
+                      </Text>
+                      <TextInput
+                        style={[styles.textInput, errorMsg && styles.inputErrorBorder]}
+                        value={strValue}
+                        onChangeText={(text) => {
+                          setDynamicAnswers((prev) => ({ ...prev, [question.key]: text }));
+                          clearFieldError(question.key);
+                        }}
+                        onBlur={() => handleDateBlur(question)}
+                        placeholder="YYYY-MM-DD (e.g. 1998-05-14)"
+                        placeholderTextColor="#94A3B8"
+                        maxLength={10}
+                      />
+                      {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+                    </View>
+                  );
+                }
+
+                const isTel =
+                  question.type === 'TEL' ||
+                  question.type === 'PHONE' ||
+                  /phone|mobile|contact|tel/i.test(question.key || '') ||
+                  /phone|mobile|contact|tel/i.test(question.label || '');
+                const isNum =
+                  (question.type === 'NUMBER' ||
+                    /\b(pin|zip|postal|age)\b/i.test(question.key || '') ||
+                    /\b(pin\s*code|zip\s*code|postal\s*code|age)\b/i.test(question.label || '')) &&
+                  !/lang/i.test(question.key || '') &&
+                  !/lang/i.test(question.label || '');
+
+                return (
+                  <View key={question.id || question.key} style={styles.fieldGroup}>
+                    <Text style={styles.inputLabel}>
+                      {question.label}{' '}
+                      {question.isRequired ? <Text style={styles.reqStar}>*</Text> : null}
+                    </Text>
+                    <TextInput
+                      style={[styles.textInput, errorMsg && styles.inputErrorBorder]}
+                      value={strValue}
+                      onChangeText={(text) => handleDynamicTextChange(question, text)}
+                      keyboardType={isTel ? 'phone-pad' : isNum ? 'numeric' : 'default'}
+                      placeholder={question.placeholder || ''}
+                      placeholderTextColor="#94A3B8"
+                    />
+                    {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+                  </View>
+                );
+              })
+            )}
+
+            {/* SECTION 3: Required Certificates & Academic Transcripts */}
+            <View style={[styles.sectionTitleRow, styles.sectionDividerTop]}>
+              <Ionicons name="document-attach-outline" size={20} color="#4F46E5" />
+              <Text style={styles.sectionTitle}>3. Required Certificates & Transcripts</Text>
+            </View>
+            <Text style={styles.sectionSubTitle}>
+              Upload clear scanned copies (.pdf, .png, .jpg). All 8 documents below are required.
             </Text>
 
-            {DOCUMENT_ITEMS.map((item) => {
-              const currentDoc = uploadedDocs[item.key];
-              const isUploading = uploadingDocKey === item.key;
-              const hasError = Boolean(errors[item.key]);
+            {REQUIRED_DOC_FIELDS.map((doc) => {
+              const uploaded = documents[doc.key];
+              const isUploading = uploadingKey === doc.key;
+              const pct = uploadProgress[doc.key] ?? 0;
+              const upErr = uploadErrors[doc.key];
+              const fieldErr = errors[doc.key];
 
               return (
-                <View key={item.key} style={styles.docRowCard}>
-                  <View style={styles.docRowInfo}>
-                    <Text style={styles.inputLabel}>
-                      {item.label} {item.required ? <Text style={styles.asterisk}>*</Text> : null}
+                <View
+                  key={doc.key}
+                  style={[styles.docRowCard, fieldErr && styles.inputErrorBorder]}
+                >
+                  <View style={styles.docInfoCol}>
+                    <Text style={styles.docLabel}>
+                      {doc.label} <Text style={styles.reqStar}>*</Text>
                     </Text>
-                    <Text style={styles.docHintText}>{item.hint}</Text>
+                    <Text style={styles.docHintText}>{doc.hint}</Text>
 
-                    {currentDoc ? (
-                      <View style={styles.uploadedFilePill}>
-                        <Ionicons name="document-text-outline" size={14} color="#0284C7" />
-                        <Text style={styles.uploadedFileName} numberOfLines={1}>
-                          {currentDoc.name}
-                        </Text>
+                    {doc.key === 'photo' && photoPreviewUri ? (
+                      <Image
+                        source={{ uri: photoPreviewUri }}
+                        style={styles.photoPreview}
+                        resizeMode="cover"
+                      />
+                    ) : null}
+
+                    {uploaded?.name ? (
+                      <View style={styles.uploadedFileRow}>
+                        <View style={styles.uploadedFilePill}>
+                          <Ionicons name="checkmark-circle" size={14} color="#059669" />
+                          <Text style={styles.uploadedFileName} numberOfLines={1}>
+                            {uploaded.name}
+                          </Text>
+                        </View>
                         <TouchableOpacity
-                          onPress={() => handleRemoveDoc(item.key)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          onPress={() => handleRemoveSingleDocument(doc.key)}
+                          accessibilityLabel={`Remove ${doc.label}`}
                         >
-                          <Ionicons name="close-circle" size={16} color="#EF4444" style={{ marginLeft: 6 }} />
+                          <Ionicons name="close-circle" size={18} color="#EF4444" />
                         </TouchableOpacity>
                       </View>
                     ) : null}
 
-                    {hasError ? <Text style={styles.errorText}>{errors[item.key]}</Text> : null}
+                    {upErr ? <Text style={styles.errorText}>{upErr}</Text> : null}
+                    {!upErr && fieldErr ? <Text style={styles.errorText}>{fieldErr}</Text> : null}
                   </View>
 
                   <TouchableOpacity
                     style={[
                       styles.docUploadBtn,
-                      currentDoc && styles.docUploadBtnSuccess,
-                      isUploading && { opacity: 0.6 },
+                      uploaded?.url ? styles.docUploadBtnSuccess : null,
                     ]}
-                    onPress={() => handlePickDocument(item.key)}
+                    onPress={() => handlePickAndUploadDocument(doc.key, doc.imageOnly)}
                     disabled={isUploading}
                   >
                     {isUploading ? (
-                      <ActivityIndicator size="small" color="#0284C7" />
-                    ) : currentDoc ? (
-                      <>
-                        <Ionicons name="checkmark-circle" size={16} color="#10B981" style={{ marginRight: 4 }} />
-                        <Text style={styles.docUploadBtnSuccessText}>Re-upload</Text>
-                      </>
+                      <View style={styles.uploadProgressWrap}>
+                        <ActivityIndicator size="small" color="#2563EB" />
+                        <Text style={styles.uploadProgressText}>{pct}%</Text>
+                      </View>
                     ) : (
-                      <>
-                        <Ionicons name="cloud-upload-outline" size={16} color="#0284C7" style={{ marginRight: 4 }} />
-                        <Text style={styles.docUploadBtnText}>Choose File</Text>
-                      </>
+                      <Text
+                        style={[
+                          styles.docUploadBtnText,
+                          uploaded?.url ? styles.docUploadBtnSuccessText : null,
+                        ]}
+                      >
+                        {uploaded?.url ? 'Replace' : upErr ? 'Retry' : 'Upload'}
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </View>
               );
             })}
 
-            {/* OTHER SUPPORTING CERTIFICATES / DOCUMENTS */}
-            <View style={{ marginTop: 14 }}>
-              <Text style={styles.inputLabel}>OTHER SUPPORTING CERTIFICATES / DOCUMENTS</Text>
+            {/* Other Supporting Certificates (Multiple) */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.inputLabel}>Other Supporting Certificates / Documents</Text>
               <TouchableOpacity
                 style={styles.dashedUploadBox}
-                onPress={() => handlePickDocument('otherCertificates')}
+                onPress={() => handlePickAndUploadDocument('otherCertificates', false)}
+                disabled={uploadingKey === 'otherCertificates'}
               >
-                <Ionicons name="cloud-upload-outline" size={28} color="#0284C7" style={{ marginBottom: 6 }} />
-                <Text style={styles.dashedUploadText}>
-                  {uploadedDocs.otherCertificates
-                    ? `Uploaded: ${uploadedDocs.otherCertificates.name}`
-                    : 'Upload Additional Certificate'}
-                </Text>
+                {uploadingKey === 'otherCertificates' ? (
+                  <View style={styles.uploadProgressWrap}>
+                    <ActivityIndicator size="small" color="#2563EB" />
+                    <Text style={styles.dashedUploadText}>
+                      Uploading ({uploadProgress.otherCertificates ?? 0}%)...
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.uploadProgressWrap}>
+                    <Ionicons name="cloud-upload-outline" size={18} color="#0284C7" />
+                    <Text style={styles.dashedUploadText}>Add Supporting Certificate (PDF / Image)</Text>
+                  </View>
+                )}
               </TouchableOpacity>
-            </View>
-          </View>
+              {uploadErrors.otherCertificates ? (
+                <Text style={styles.errorText}>{uploadErrors.otherCertificates}</Text>
+              ) : null}
 
-          {/* SECTION 4: Declaration */}
-          <View style={styles.cardContainer}>
-            <View style={styles.sectionTitleRow}>
+              {(documents.otherCertificates || []).map((cert, idx) => (
+                <View key={`${cert.url}-${idx}`} style={styles.otherCertItem}>
+                  <View style={styles.otherCertLeft}>
+                    <Ionicons name="document-text-outline" size={16} color="#4F46E5" />
+                    <Text style={styles.uploadedFileName} numberOfLines={1}>
+                      {cert.name || `Certificate ${idx + 1}`}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => handleRemoveOtherCertificate(idx)}>
+                    <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+
+            {/* SECTION 4: Declaration */}
+            <View style={[styles.sectionTitleRow, styles.sectionDividerTop]}>
+              <Ionicons name="shield-checkmark-outline" size={20} color="#4F46E5" />
               <Text style={styles.sectionTitle}>4. Declaration</Text>
             </View>
 
-            <View style={styles.declarationBox}>
-              <View style={styles.declarationHeaderRow}>
-                <TouchableOpacity
-                  style={[styles.checkboxSquare, declarationAccepted && styles.checkboxSquareChecked]}
-                  onPress={() => setDeclarationAccepted(!declarationAccepted)}
-                  activeOpacity={0.8}
-                >
-                  {declarationAccepted ? (
-                    <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                  ) : null}
-                </TouchableOpacity>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.declarationHeading}>Student Declaration:</Text>
-                  <Text style={styles.declarationBody}>
-                    I hereby do declare that all the details and documents which are mentioned above are
-                    true to best of my knowledge. I assure that, if I am admitted, I will abide by the
-                    rules and regulations of COTRTS-GO. I submit to the right of the Seminary administration
-                    to take any appropriate disciplinary action against me, if, in their judgment, my
-                    behavior or character is contrary to the emphasis of the seminary.
-                  </Text>
-                </View>
+            <TouchableOpacity
+              style={[
+                styles.declarationBox,
+                errors.declarationAccepted && styles.inputErrorBorder,
+              ]}
+              activeOpacity={0.85}
+              onPress={() => {
+                setDeclarationAccepted((prev) => !prev);
+                clearFieldError('declarationAccepted');
+              }}
+            >
+              <View style={[styles.checkboxSquare, declarationAccepted && styles.checkboxChecked]}>
+                {declarationAccepted ? (
+                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                ) : null}
               </View>
-
-              {errors.declaration ? <Text style={styles.errorText}>{errors.declaration}</Text> : null}
-            </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.declarationHeading}>Student Declaration</Text>
+                <Text style={styles.declarationBody}>
+                  I hereby do declare that all the details and documents which are mentioned above are
+                  true to best of my knowledge. I assure that, if I am admitted, I will abide by the
+                  rules and regulations of the institution and administration.
+                </Text>
+              </View>
+            </TouchableOpacity>
+            {errors.declarationAccepted ? (
+              <Text style={styles.errorText}>{errors.declarationAccepted}</Text>
+            ) : null}
 
             {/* Submit Application Button */}
             <View style={styles.submitRow}>
               <TouchableOpacity
                 style={[styles.submitButton, isSubmitting && { opacity: 0.7 }]}
-                onPress={handleRegister}
+                onPress={handleSubmitRegistration}
                 disabled={isSubmitting}
                 activeOpacity={0.85}
               >
@@ -1071,7 +1339,14 @@ export default function StudentRegisterScreen() {
 
             <View style={styles.loginRedirectRow}>
               <Text style={styles.loginRedirectText}>Already have an account? </Text>
-              <TouchableOpacity onPress={() => router.push('/student/login')}>
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({
+                    pathname: '/student/login',
+                    params: { organizationCode: organizationCode.trim() },
+                  })
+                }
+              >
                 <Text style={styles.loginRedirectLink}>Sign In</Text>
               </TouchableOpacity>
             </View>
@@ -1079,39 +1354,29 @@ export default function StudentRegisterScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* DROPDOWN SELECTION MODAL */}
+      {/* SHARED SELECTION MODAL */}
       <Modal
-        visible={modalType !== null}
+        visible={activeModal !== null}
         transparent
         animationType="fade"
-        onRequestClose={() => setModalType(null)}
+        onRequestClose={() => setActiveModal(null)}
       >
         <TouchableOpacity
           style={styles.modalBackdrop}
           activeOpacity={1}
-          onPress={() => setModalType(null)}
+          onPress={() => setActiveModal(null)}
         >
           <View style={styles.modalSheet} onStartShouldSetResponder={() => true}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {modalType === 'track'
-                  ? 'Select Accreditation / Track'
-                  : modalType === 'region'
-                    ? 'Select Study Region'
-                    : modalType === 'gender'
-                      ? 'Select Gender'
-                      : modalType === 'marital'
-                        ? 'Select Marital Status'
-                        : 'Select Program / Course'}
-              </Text>
-              <TouchableOpacity onPress={() => setModalType(null)}>
+              <Text style={styles.modalTitle}>{activeModal?.title || 'Select Option'}</Text>
+              <TouchableOpacity onPress={() => setActiveModal(null)}>
                 <Ionicons name="close" size={22} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 320 }}>
-              {modalType === 'track' &&
-                trackOptions.map((item) => (
+            <ScrollView style={{ maxHeight: 340 }}>
+              {activeModal?.type === 'track' &&
+                TRACK_OPTIONS.map((item) => (
                   <TouchableOpacity
                     key={item.value}
                     style={[
@@ -1120,7 +1385,8 @@ export default function StudentRegisterScreen() {
                     ]}
                     onPress={() => {
                       setAtaStatus(item.value);
-                      setModalType(null);
+                      clearFieldError('ataStatus');
+                      setActiveModal(null);
                     }}
                   >
                     <Text
@@ -1137,113 +1403,84 @@ export default function StudentRegisterScreen() {
                   </TouchableOpacity>
                 ))}
 
-              {modalType === 'region' &&
-                regions.map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      styles.modalOption,
-                      regionId === item.id && styles.modalOptionSelected,
-                    ]}
-                    onPress={() => {
-                      setRegionId(item.id);
-                      setModalType(null);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.modalOptionText,
-                        regionId === item.id && styles.modalOptionTextSelected,
-                      ]}
+              {activeModal?.type === 'region' &&
+                regions.map((item) => {
+                  const selected = regionId === item.id;
+                  const label = item.isAta ? `${item.name} (ATA Accredited)` : item.name;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.modalOption, selected && styles.modalOptionSelected]}
+                      onPress={() => {
+                        setRegionId(item.id);
+                        clearFieldError('regionId');
+                        setActiveModal(null);
+                      }}
                     >
-                      {item.name}
-                    </Text>
-                    {regionId === item.id ? (
-                      <Ionicons name="checkmark" size={18} color="#0284C7" />
-                    ) : null}
-                  </TouchableOpacity>
-                ))}
+                      <Text
+                        style={[
+                          styles.modalOptionText,
+                          selected && styles.modalOptionTextSelected,
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                      {selected ? <Ionicons name="checkmark" size={18} color="#0284C7" /> : null}
+                    </TouchableOpacity>
+                  );
+                })}
 
-              {modalType === 'gender' &&
-                genderOptions.map((item) => (
-                  <TouchableOpacity
-                    key={item}
-                    style={[
-                      styles.modalOption,
-                      gender === item && styles.modalOptionSelected,
-                    ]}
-                    onPress={() => {
-                      setGender(item);
-                      setModalType(null);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.modalOptionText,
-                        gender === item && styles.modalOptionTextSelected,
-                      ]}
+              {activeModal?.type === 'program' &&
+                programs.map((item) => {
+                  const selected = dynamicAnswers[activeModal.key] === item.id;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.modalOption, selected && styles.modalOptionSelected]}
+                      onPress={() => {
+                        setDynamicAnswers((prev) => ({ ...prev, [activeModal.key]: item.id }));
+                        clearFieldError(activeModal.key);
+                        setActiveModal(null);
+                      }}
                     >
-                      {item}
-                    </Text>
-                    {gender === item ? (
-                      <Ionicons name="checkmark" size={18} color="#0284C7" />
-                    ) : null}
-                  </TouchableOpacity>
-                ))}
+                      <Text
+                        style={[
+                          styles.modalOptionText,
+                          selected && styles.modalOptionTextSelected,
+                        ]}
+                      >
+                        {item.name}
+                      </Text>
+                      {selected ? <Ionicons name="checkmark" size={18} color="#0284C7" /> : null}
+                    </TouchableOpacity>
+                  );
+                })}
 
-              {modalType === 'marital' &&
-                maritalOptions.map((item) => (
-                  <TouchableOpacity
-                    key={item}
-                    style={[
-                      styles.modalOption,
-                      maritalStatus === item && styles.modalOptionSelected,
-                    ]}
-                    onPress={() => {
-                      setMaritalStatus(item);
-                      setModalType(null);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.modalOptionText,
-                        maritalStatus === item && styles.modalOptionTextSelected,
-                      ]}
+              {activeModal?.type === 'dynamic' &&
+                activeModal.options.map((opt) => {
+                  const selected = dynamicAnswers[activeModal.key] === opt;
+                  return (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[styles.modalOption, selected && styles.modalOptionSelected]}
+                      onPress={() => {
+                        setDynamicAnswers((prev) => ({ ...prev, [activeModal.key]: opt }));
+                        clearFieldError(activeModal.key);
+                        setActiveModal(null);
+                      }}
                     >
-                      {item}
-                    </Text>
-                    {maritalStatus === item ? (
-                      <Ionicons name="checkmark" size={18} color="#0284C7" />
-                    ) : null}
-                  </TouchableOpacity>
-                ))}
-
-              {modalType === 'program' &&
-                programs.map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      styles.modalOption,
-                      interestedCourse === item.id && styles.modalOptionSelected,
-                    ]}
-                    onPress={() => {
-                      setInterestedCourse(item.id);
-                      setModalType(null);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.modalOptionText,
-                        interestedCourse === item.id && styles.modalOptionTextSelected,
-                      ]}
-                    >
-                      {item.name}
-                    </Text>
-                    {interestedCourse === item.id ? (
-                      <Ionicons name="checkmark" size={18} color="#0284C7" />
-                    ) : null}
-                  </TouchableOpacity>
-                ))}
+                      <Text
+                        style={[
+                          styles.modalOptionText,
+                          selected && styles.modalOptionTextSelected,
+                        ]}
+                      >
+                        {opt}
+                      </Text>
+                      {selected ? <Ionicons name="checkmark" size={18} color="#0284C7" /> : null}
+                    </TouchableOpacity>
+                  );
+                })}
             </ScrollView>
           </View>
         </TouchableOpacity>
@@ -1252,367 +1489,579 @@ export default function StudentRegisterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F1F5F9', // Clean light canvas matching user screenshot
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 48,
-  },
-  navBar: {
-    marginBottom: 8,
-  },
-  navBackBtn: {
-    alignSelf: 'flex-start',
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#E2E8F0',
-  },
-  pageHeader: {
-    alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 4,
-  },
-  pageTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#1E293B',
-    textAlign: 'center',
-    letterSpacing: -0.3,
-    marginBottom: 6,
-  },
-  pageSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    textAlign: 'center',
-    maxWidth: 340,
-    lineHeight: 18,
-  },
-  cardContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    // Subtle shadow
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 18,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  sectionSubTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-    letterSpacing: 0.8,
-  },
-  fieldGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-    letterSpacing: 0.6,
-    marginBottom: 6,
-  },
-  asterisk: {
-    color: '#DC2626',
-    fontWeight: '800',
-  },
-  textInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    fontSize: 14,
-    color: '#0F172A',
-  },
-  readOnlyInput: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
-    color: '#64748B',
-  },
-  textArea: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#0F172A',
-    textAlignVertical: 'top',
-    minHeight: 64,
-  },
-  dropdownInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-  },
-  dropdownTextPlaceholder: {
-    fontSize: 14,
-    color: '#94A3B8',
-  },
-  dropdownTextFilled: {
-    fontSize: 14,
-    color: '#0F172A',
-    fontWeight: '500',
-    flex: 1,
-  },
-  passwordInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-  },
-  passwordInput: {
-    flex: 1,
-    paddingVertical: 11,
-    fontSize: 14,
-    color: '#0F172A',
-  },
-  inputErrorBorder: {
-    borderColor: '#EF4444',
-  },
-  row: {
-    flexDirection: 'row',
-  },
-  col: {
-    flex: 1,
-  },
-  docRowCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-  },
-  docRowInfo: {
-    flex: 1,
-    marginRight: 10,
-  },
-  docHintText: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  uploadedFilePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E0F2FE',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginTop: 6,
-    alignSelf: 'flex-start',
-    maxWidth: 220,
-  },
-  uploadedFileName: {
-    fontSize: 11,
-    color: '#0369A1',
-    fontWeight: '600',
-    marginLeft: 4,
-    flexShrink: 1,
-  },
-  docUploadBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-  },
-  docUploadBtnSuccess: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
-  },
-  docUploadBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0284C7',
-  },
-  docUploadBtnSuccessText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#059669',
-  },
-  dashedUploadBox: {
-    borderWidth: 1.5,
-    borderColor: '#93C5FD',
-    borderStyle: 'dashed',
-    backgroundColor: '#F0F9FF',
-    borderRadius: 10,
-    paddingVertical: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 6,
-  },
-  dashedUploadText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0284C7',
-  },
-  declarationBox: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 18,
-  },
-  declarationHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  checkboxSquare: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: '#94A3B8',
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    marginTop: 2,
-  },
-  checkboxSquareChecked: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
-  },
-  declarationHeading: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 6,
-  },
-  declarationBody: {
-    fontSize: 12,
-    color: '#475569',
-    lineHeight: 18,
-  },
-  submitRow: {
-    alignItems: 'flex-end',
-    marginTop: 6,
-  },
-  submitButton: {
-    backgroundColor: '#2563EB',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 170,
-  },
-  submitButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  loginRedirectRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 18,
-  },
-  loginRedirectText: {
-    fontSize: 13,
-    color: '#64748B',
-  },
-  loginRedirectLink: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  errorText: {
-    color: '#DC2626',
-    fontSize: 11,
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.4)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 20,
-    maxHeight: '60%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    marginBottom: 8,
-  },
-  modalTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  modalOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
-  },
-  modalOptionSelected: {
-    backgroundColor: '#F0F9FF',
-    paddingHorizontal: 8,
-    borderRadius: 6,
-  },
-  modalOptionText: {
-    fontSize: 14,
-    color: '#334155',
-  },
-  modalOptionTextSelected: {
-    color: '#0284C7',
-    fontWeight: '700',
-  },
-});
+function createStyles(isDark: boolean) {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: isDark ? '#0B0F19' : '#F1F5F9',
+    },
+    keyboardView: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 48,
+    },
+    navBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    navBackBtn: {
+      padding: 8,
+      borderRadius: 8,
+      backgroundColor: isDark ? '#1E293B' : '#E2E8F0',
+    },
+    orgBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      maxWidth: '75%',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 20,
+      backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
+      borderWidth: 1,
+      borderColor: isDark ? '#334155' : '#E2E8F0',
+    },
+    orgLogo: {
+      width: 20,
+      height: 20,
+      borderRadius: 4,
+    },
+    orgBadgeText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: isDark ? '#F8FAFC' : '#0F172A',
+    },
+    pageHeader: {
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    pageTitle: {
+      fontSize: 22,
+      fontWeight: '800',
+      color: isDark ? '#F8FAFC' : '#0F172A',
+      textAlign: 'center',
+    },
+    pageSubtitle: {
+      fontSize: 13,
+      color: isDark ? '#94A3B8' : '#64748B',
+      textAlign: 'center',
+      marginTop: 4,
+    },
+    errorBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: isDark ? '#450A0A' : '#FEF2F2',
+      borderWidth: 1,
+      borderColor: '#EF4444',
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 14,
+    },
+    errorBannerText: {
+      flex: 1,
+      color: isDark ? '#FCA5A5' : '#B91C1C',
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    cardContainer: {
+      backgroundColor: isDark ? '#161F30' : '#FFFFFF',
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: isDark ? '#1F2937' : '#E2E8F0',
+      padding: 18,
+    },
+    sectionTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingBottom: 10,
+      marginBottom: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? '#1F2937' : '#E2E8F0',
+    },
+    sectionDividerTop: {
+      marginTop: 22,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: isDark ? '#F8FAFC' : '#0F172A',
+    },
+    sectionSubTitle: {
+      fontSize: 12,
+      color: isDark ? '#94A3B8' : '#64748B',
+      marginBottom: 12,
+      marginTop: -6,
+    },
+    fieldGroup: {
+      marginBottom: 14,
+    },
+    inputLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: isDark ? '#CBD5E1' : '#334155',
+      marginBottom: 6,
+    },
+    reqStar: {
+      color: '#EF4444',
+    },
+    textInput: {
+      backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+      borderWidth: 1,
+      borderColor: isDark ? '#334155' : '#CBD5E1',
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 14,
+      color: isDark ? '#F8FAFC' : '#0F172A',
+    },
+    textArea: {
+      backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+      borderWidth: 1,
+      borderColor: isDark ? '#334155' : '#CBD5E1',
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      minHeight: 84,
+      fontSize: 14,
+      color: isDark ? '#F8FAFC' : '#0F172A',
+    },
+    dropdownInput: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+      borderWidth: 1,
+      borderColor: isDark ? '#334155' : '#CBD5E1',
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+    },
+    dropdownTextFilled: {
+      fontSize: 14,
+      color: isDark ? '#F8FAFC' : '#0F172A',
+      flex: 1,
+    },
+    dropdownPlaceholder: {
+      fontSize: 14,
+      color: '#94A3B8',
+      flex: 1,
+    },
+    inputErrorBorder: {
+      borderColor: '#EF4444',
+    },
+    orgInputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    orgCodeInput: {
+      flex: 1,
+    },
+    verifyBtn: {
+      backgroundColor: '#4F46E5',
+      paddingHorizontal: 16,
+      paddingVertical: 11,
+      borderRadius: 10,
+      minWidth: 74,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    verifyBtnText: {
+      color: '#FFFFFF',
+      fontWeight: '700',
+      fontSize: 13,
+    },
+    helperSuccessText: {
+      color: '#059669',
+      fontSize: 11,
+      fontWeight: '600',
+      marginTop: 4,
+    },
+    planHintText: {
+      color: '#0284C7',
+      fontSize: 11,
+      marginTop: 4,
+      fontWeight: '500',
+    },
+    passwordInputWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+      borderWidth: 1,
+      borderColor: isDark ? '#334155' : '#CBD5E1',
+      borderRadius: 10,
+      paddingHorizontal: 12,
+    },
+    passwordInput: {
+      flex: 1,
+      paddingVertical: 10,
+      fontSize: 14,
+      color: isDark ? '#F8FAFC' : '#0F172A',
+    },
+    inlineLoadingBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 10,
+    },
+    inlineStatusText: {
+      fontSize: 13,
+      color: isDark ? '#94A3B8' : '#64748B',
+    },
+    inlineErrorBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+      padding: 10,
+      borderRadius: 8,
+      backgroundColor: isDark ? '#450A0A' : '#FEF2F2',
+      borderWidth: 1,
+      borderColor: '#EF4444',
+    },
+    errorTextInline: {
+      flex: 1,
+      fontSize: 12,
+      color: isDark ? '#FCA5A5' : '#DC2626',
+    },
+    retryLink: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#2563EB',
+    },
+    inlineCheckRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 4,
+    },
+    inlineCheckLabel: {
+      flex: 1,
+      fontSize: 13,
+      color: isDark ? '#CBD5E1' : '#334155',
+      fontWeight: '600',
+    },
+    docRowCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+      backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+      borderWidth: 1,
+      borderColor: isDark ? '#334155' : '#E2E8F0',
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 10,
+    },
+    docInfoCol: {
+      flex: 1,
+    },
+    docLabel: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: isDark ? '#F8FAFC' : '#1E293B',
+    },
+    docHintText: {
+      fontSize: 11,
+      color: isDark ? '#94A3B8' : '#64748B',
+      marginTop: 2,
+    },
+    photoPreview: {
+      width: 64,
+      height: 64,
+      borderRadius: 8,
+      marginTop: 8,
+      borderWidth: 1,
+      borderColor: '#CBD5E1',
+    },
+    uploadedFileRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 6,
+    },
+    uploadedFilePill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: isDark ? '#0C4A6E' : '#E0F2FE',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+      maxWidth: '88%',
+    },
+    uploadedFileName: {
+      fontSize: 12,
+      color: isDark ? '#7DD3FC' : '#0369A1',
+      fontWeight: '600',
+      flexShrink: 1,
+    },
+    docUploadBtn: {
+      backgroundColor: isDark ? '#0C4A6E' : '#EFF6FF',
+      borderWidth: 1,
+      borderColor: isDark ? '#0369A1' : '#BFDBFE',
+      borderRadius: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      minWidth: 74,
+      alignItems: 'center',
+    },
+    docUploadBtnSuccess: {
+      backgroundColor: isDark ? '#064E3B' : '#ECFDF5',
+      borderColor: '#059669',
+    },
+    docUploadBtnText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: isDark ? '#38BDF8' : '#2563EB',
+    },
+    docUploadBtnSuccessText: {
+      color: isDark ? '#34D399' : '#059669',
+    },
+    uploadProgressWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    uploadProgressText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: '#2563EB',
+    },
+    dashedUploadBox: {
+      borderWidth: 1.5,
+      borderStyle: 'dashed',
+      borderColor: isDark ? '#0369A1' : '#93C5FD',
+      backgroundColor: isDark ? '#0F2942' : '#F0F9FF',
+      borderRadius: 10,
+      padding: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    dashedUploadText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: isDark ? '#38BDF8' : '#0284C7',
+    },
+    otherCertItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      marginTop: 8,
+    },
+    otherCertLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flex: 1,
+      marginRight: 8,
+    },
+    declarationBox: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
+      backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+      borderWidth: 1.5,
+      borderColor: isDark ? '#334155' : '#E2E8F0',
+      borderRadius: 12,
+      padding: 14,
+    },
+    checkboxSquare: {
+      width: 22,
+      height: 22,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: isDark ? '#475569' : '#94A3B8',
+      backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 2,
+    },
+    checkboxChecked: {
+      backgroundColor: '#4F46E5',
+      borderColor: '#4F46E5',
+    },
+    declarationHeading: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: isDark ? '#F8FAFC' : '#0F172A',
+      marginBottom: 4,
+    },
+    declarationBody: {
+      fontSize: 12,
+      lineHeight: 18,
+      color: isDark ? '#CBD5E1' : '#475569',
+    },
+    submitRow: {
+      marginTop: 22,
+    },
+    submitButton: {
+      backgroundColor: '#4F46E5',
+      borderRadius: 14,
+      paddingVertical: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+      ...Platform.select({
+        ios: {
+          shadowColor: '#4F46E5',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+        },
+        android: {
+          elevation: 4,
+        },
+      }),
+    },
+    submitButtonText: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: '#FFFFFF',
+    },
+    loginRedirectRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      marginTop: 18,
+    },
+    loginRedirectText: {
+      fontSize: 13,
+      color: isDark ? '#94A3B8' : '#64748B',
+    },
+    loginRedirectLink: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: '#2563EB',
+    },
+    errorText: {
+      color: '#DC2626',
+      fontSize: 11,
+      marginTop: 4,
+      fontWeight: '500',
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(15, 23, 42, 0.45)',
+      justifyContent: 'flex-end',
+    },
+    modalSheet: {
+      backgroundColor: isDark ? '#111827' : '#FFFFFF',
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      padding: 20,
+      maxHeight: '65%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingBottom: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? '#1F2937' : '#F1F5F9',
+      marginBottom: 8,
+    },
+    modalTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: isDark ? '#F8FAFC' : '#1E293B',
+    },
+    modalOption: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? '#1E293B' : '#F8FAFC',
+    },
+    modalOptionSelected: {
+      backgroundColor: isDark ? '#0C4A6E' : '#F0F9FF',
+      paddingHorizontal: 10,
+      borderRadius: 8,
+    },
+    modalOptionText: {
+      fontSize: 14,
+      color: isDark ? '#E2E8F0' : '#334155',
+      flex: 1,
+      paddingRight: 8,
+    },
+    modalOptionTextSelected: {
+      color: isDark ? '#38BDF8' : '#0284C7',
+      fontWeight: '700',
+    },
+    confirmationScroll: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      padding: 20,
+    },
+    confirmationCard: {
+      backgroundColor: isDark ? '#161F30' : '#FFFFFF',
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: isDark ? '#1F2937' : '#E2E8F0',
+      padding: 24,
+      alignItems: 'center',
+    },
+    confirmationIconCircle: {
+      width: 78,
+      height: 78,
+      borderRadius: 39,
+      backgroundColor: isDark ? '#064E3B' : '#ECFDF5',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 16,
+    },
+    confirmationTitle: {
+      fontSize: 22,
+      fontWeight: '800',
+      color: isDark ? '#F8FAFC' : '#0F172A',
+      marginBottom: 4,
+      textAlign: 'center',
+    },
+    confirmationSubtitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#2563EB',
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    confirmationBody: {
+      fontSize: 14,
+      lineHeight: 21,
+      color: isDark ? '#CBD5E1' : '#475569',
+      textAlign: 'center',
+      marginBottom: 16,
+    },
+    confirmationBold: {
+      fontWeight: '700',
+      color: isDark ? '#F8FAFC' : '#0F172A',
+    },
+    confirmationNoticeBox: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      backgroundColor: isDark ? '#0C4A6E' : '#F0F9FF',
+      borderWidth: 1,
+      borderColor: isDark ? '#0369A1' : '#BAE6FD',
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 22,
+      width: '100%',
+    },
+    confirmationNoticeText: {
+      flex: 1,
+      fontSize: 13,
+      lineHeight: 19,
+      color: isDark ? '#BAE6FD' : '#0369A1',
+    },
+  });
+}

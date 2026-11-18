@@ -7,6 +7,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../context/ThemeContext';
 
 interface MessageInputProps {
   onSendMessage: (content: string) => void;
@@ -47,13 +48,24 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   };
 
+  const { isDarkMode } = useTheme();
   const hasText = text.trim().length > 0;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.inputWrapper}>
+    <View
+      style={[
+        styles.container,
+        isDarkMode && { backgroundColor: '#111827', borderTopColor: '#1F2937' },
+      ]}
+    >
+      <View
+        style={[
+          styles.inputWrapper,
+          isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+        ]}
+      >
         <TextInput
-          style={styles.textInput}
+          style={[styles.textInput, isDarkMode && { color: '#F8FAFC' }]}
           placeholder={placeholder}
           placeholderTextColor="#94A3B8"
           value={text}
@@ -68,7 +80,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       <TouchableOpacity
         style={[
           styles.sendButton,
-          hasText && !disabled ? styles.sendButtonActive : styles.sendButtonDisabled,
+          hasText && !disabled
+            ? styles.sendButtonActive
+            : [styles.sendButtonDisabled, isDarkMode && { backgroundColor: '#1E293B' }],
         ]}
         onPress={handleSend}
         disabled={!hasText || disabled}
@@ -77,7 +91,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         <Ionicons
           name="send"
           size={17}
-          color={hasText && !disabled ? '#FFFFFF' : '#94A3B8'}
+          color={hasText && !disabled ? '#FFFFFF' : isDarkMode ? '#64748B' : '#94A3B8'}
         />
       </TouchableOpacity>
     </View>

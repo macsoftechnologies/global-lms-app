@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
+  Switch,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +14,7 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { AuthStorage } from '../../src/services/authStorage';
 import { DashboardService } from '../../src/services/dashboardService';
+import { useTheme } from '../../src/context/ThemeContext';
 
 const COLORS = {
   bg: '#F5F6FB',
@@ -39,16 +41,22 @@ interface CircleButtonProps {
   color?: string;
   badge?: number | string;
   onPress?: () => void;
+  isDarkMode?: boolean;
 }
 
 const CircleButton: React.FC<CircleButtonProps> = ({
   icon,
-  color = COLORS.text,
+  color,
   badge,
   onPress,
+  isDarkMode,
 }) => (
-  <TouchableOpacity style={styles.circleBtn} onPress={onPress} activeOpacity={0.7}>
-    <Feather name={icon} size={18} color={color} />
+  <TouchableOpacity
+    style={[styles.circleBtn, isDarkMode && { backgroundColor: '#1E293B' }]}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <Feather name={icon} size={18} color={color || (isDarkMode ? '#F8FAFC' : COLORS.text)} />
     {badge ? (
       <View style={styles.badge}>
         <Text style={styles.badgeText}>{badge}</Text>
@@ -63,31 +71,48 @@ interface HeaderProps {
   onMenuPress?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ userName, onMenuPress }) => (
-  <View style={styles.header}>
-    <TouchableOpacity onPress={onMenuPress} style={styles.menuBtn}>
-      <Feather name="menu" size={22} color={COLORS.text} />
-    </TouchableOpacity>
-
-    <View style={styles.headerRight}>
-      <CircleButton icon="video" onPress={() => router.push('/(student-tabs)/dashboard')} />
-      <CircleButton icon="message-square" onPress={() => router.push('/(student-tabs)/dashboard')} />
-      <CircleButton icon="moon" color={COLORS.primary} />
-      <CircleButton icon="bell" badge={2} />
-
-      <TouchableOpacity
-        style={styles.profile}
-        activeOpacity={0.8}
-        onPress={() => router.push('/(student-tabs)/profile')}
-      >
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{userName?.[0]?.toUpperCase() || 'U'}</Text>
-          <View style={styles.onlineDot} />
-        </View>
+const Header: React.FC<HeaderProps> = ({ userName, onMenuPress }) => {
+  const { isDarkMode } = useTheme();
+  return (
+    <View
+      style={[
+        styles.header,
+        isDarkMode && { backgroundColor: '#111827', borderBottomColor: '#1F2937' },
+      ]}
+    >
+      <TouchableOpacity onPress={onMenuPress} style={styles.menuBtn}>
+        <Feather name="menu" size={22} color={isDarkMode ? '#F8FAFC' : COLORS.text} />
       </TouchableOpacity>
+
+      <View style={styles.headerRight}>
+        <CircleButton
+          icon="video"
+          isDarkMode={isDarkMode}
+          onPress={() => router.push('/(student-tabs)/dashboard')}
+        />
+        <CircleButton
+          icon="message-square"
+          isDarkMode={isDarkMode}
+          onPress={() => router.push('/(student-tabs)/dashboard')}
+        />
+        <CircleButton icon="bell" badge={2} isDarkMode={isDarkMode} />
+
+        <TouchableOpacity
+          style={styles.profile}
+          activeOpacity={0.8}
+          onPress={() => router.push('/(student-tabs)/profile')}
+        >
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{userName?.[0]?.toUpperCase() || 'U'}</Text>
+            <View
+              style={[styles.onlineDot, isDarkMode && { borderColor: '#111827' }]}
+            />
+          </View>
+        </TouchableOpacity>
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 /* --------------------------- Stat card ---------------------------- */
 
@@ -107,17 +132,26 @@ const StatCard: React.FC<StatCardProps> = ({
   accent,
   soft,
   width,
-}) => (
-  <View style={[styles.statCard, { width, borderLeftColor: accent }]}>
-    <View style={styles.statTop}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <View style={[styles.statIcon, { backgroundColor: soft }]}>
-        <Feather name={icon} size={16} color={accent} />
+}) => {
+  const { isDarkMode } = useTheme();
+  return (
+    <View
+      style={[
+        styles.statCard,
+        { width, borderLeftColor: accent },
+        isDarkMode && { backgroundColor: '#161F30', shadowOpacity: 0.25 },
+      ]}
+    >
+      <View style={styles.statTop}>
+        <Text style={[styles.statLabel, isDarkMode && { color: '#94A3B8' }]}>{label}</Text>
+        <View style={[styles.statIcon, { backgroundColor: soft }]}>
+          <Feather name={icon} size={16} color={accent} />
+        </View>
       </View>
+      <Text style={[styles.statValue, isDarkMode && { color: '#F8FAFC' }]}>{value}</Text>
     </View>
-    <Text style={styles.statValue}>{value}</Text>
-  </View>
-);
+  );
+};
 
 /* --------------------------- Dashboard ---------------------------- */
 
@@ -155,6 +189,7 @@ export default function DashboardScreen({
   programs = [],
 }: DashboardScreenProps) {
   const { width } = useWindowDimensions();
+  const { isDarkMode } = useTheme();
   const [currentUser, setCurrentUser] = useState<UserData>(user);
   const [currentStats, setCurrentStats] = useState<StatsData>(stats);
   const [currentPrograms, setCurrentPrograms] = useState<ProgramData[]>(programs);
@@ -205,7 +240,7 @@ export default function DashboardScreen({
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, isDarkMode && { backgroundColor: '#111827' }]} edges={['top']}>
       <Header
         userName={currentUser.name}
         role={currentUser.role}
@@ -219,19 +254,24 @@ export default function DashboardScreen({
       />
 
       <ScrollView
-        style={styles.scroll}
+        style={[styles.scroll, isDarkMode && { backgroundColor: '#0B0F19' }]}
         contentContainerStyle={{ padding: PAD, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Welcome */}
-        <View style={styles.welcomePill}>
-          <Text style={styles.welcomePillText}>WELCOME BACK</Text>
+        <View
+          style={[
+            styles.welcomePill,
+            isDarkMode && { backgroundColor: '#1E1B4B', borderColor: '#312E81' },
+          ]}
+        >
+          <Text style={[styles.welcomePillText, isDarkMode && { color: '#818CF8' }]}>WELCOME BACK</Text>
         </View>
 
         <View style={styles.welcomeRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Hi {currentUser.name} 👋</Text>
-            <Text style={styles.subtitle}>Pick up where you left off.</Text>
+            <Text style={[styles.title, isDarkMode && { color: '#F8FAFC' }]}>Hi {currentUser.name} 👋</Text>
+            <Text style={[styles.subtitle, isDarkMode && { color: '#94A3B8' }]}>Pick up where you left off.</Text>
           </View>
         </View>
 
@@ -278,21 +318,34 @@ export default function DashboardScreen({
         {/* My Programs */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionBar} />
-          <Text style={styles.sectionTitle}>My Programs</Text>
+          <Text style={[styles.sectionTitle, isDarkMode && { color: '#F8FAFC' }]}>My Programs</Text>
         </View>
 
         {currentPrograms.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyIcon}>
+          <View
+            style={[
+              styles.emptyCard,
+              isDarkMode && { backgroundColor: '#161F30', borderColor: '#334155' },
+            ]}
+          >
+            <View style={[styles.emptyIcon, isDarkMode && { backgroundColor: '#1E1B4B' }]}>
               <Feather name="book-open" size={30} color={COLORS.primary} />
             </View>
-            <Text style={styles.emptyTitle}>No programs</Text>
-            <Text style={styles.emptySub}>You are not enrolled in any programs.</Text>
+            <Text style={[styles.emptyTitle, isDarkMode && { color: '#F8FAFC' }]}>No programs</Text>
+            <Text style={[styles.emptySub, isDarkMode && { color: '#94A3B8' }]}>
+              You are not enrolled in any programs.
+            </Text>
           </View>
         ) : (
           currentPrograms.map((p) => (
-            <View key={p.id} style={styles.programCard}>
-              <Text style={styles.programTitle}>{p.title}</Text>
+            <View
+              key={p.id}
+              style={[
+                styles.programCard,
+                isDarkMode && { backgroundColor: '#161F30', borderWidth: 1, borderColor: '#1F2937' },
+              ]}
+            >
+              <Text style={[styles.programTitle, isDarkMode && { color: '#F8FAFC' }]}>{p.title}</Text>
             </View>
           ))
         )}
@@ -325,6 +378,8 @@ const NAV_ITEMS: NavItem[] = [
   { name: 'Results', icon: 'file-text', route: 'Results' },
   { name: 'Certificates', icon: 'award', route: 'Certificates' },
   { name: 'Payments', icon: 'dollar-sign', route: 'Payments' },
+  { name: 'Notifications', icon: 'bell', route: 'Notifications' },
+  { name: 'Profile', icon: 'user', route: 'Profile' },
 ];
 
 export interface SidebarContentProps {
@@ -339,6 +394,7 @@ export interface SidebarContentProps {
 
 export const SidebarContent: React.FC<SidebarContentProps> = ({ navigation, state }) => {
   const activeRoute = state?.routeNames?.[state.index];
+  const { isDarkMode, toggleTheme } = useTheme();
 
   return (
     <SafeAreaView style={drawer.container}>
@@ -371,6 +427,19 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ navigation, stat
           </TouchableOpacity>
         );
       })}
+
+      <View style={[drawer.item, { justifyContent: 'space-between', marginTop: 8 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <Feather name={isDarkMode ? 'sun' : 'moon'} size={20} color="#CBD5E1" />
+          <Text style={drawer.itemText}>Dark Mode</Text>
+        </View>
+        <Switch
+          value={isDarkMode}
+          onValueChange={toggleTheme}
+          trackColor={{ false: '#334155', true: '#4F46E5' }}
+          thumbColor={isDarkMode ? '#F8FAFC' : '#CBD5E1'}
+        />
+      </View>
     </SafeAreaView>
   );
 };

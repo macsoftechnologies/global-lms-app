@@ -19,6 +19,7 @@ export interface ApiResponse<T = unknown> {
 export interface RequestOptions {
   headers?: Record<string, string>;
   timeoutMs?: number;
+  skipAuth?: boolean;
 }
 
 /**
@@ -41,9 +42,48 @@ export interface OrganizationInfo {
  */
 export interface RegionOption {
   id: string;
+  _id?: string;
   name: string;
   code?: string;
   slug?: string;
+  orgId?: string;
+  isGlobal?: boolean;
+  isAta?: boolean;
+}
+
+export type FormQuestionType =
+  | 'TEXT'
+  | 'TEXTAREA'
+  | 'DROPDOWN'
+  | 'DATE'
+  | 'TEL'
+  | 'PHONE'
+  | 'NUMBER'
+  | 'CHECKBOX'
+  | string;
+
+export interface FormQuestion {
+  id: string;
+  key: string;
+  label: string;
+  type: FormQuestionType;
+  options?: string[] | null;
+  isRequired?: boolean;
+  isActive?: boolean;
+  order?: number;
+  placeholder?: string;
+}
+
+export interface PublicSubscriptionPlan {
+  id: string;
+  name?: string;
+  title?: string;
+  amount?: number;
+  price?: number;
+  currency?: string;
+  durationMonths?: number;
+  regionId?: string;
+  [key: string]: unknown;
 }
 
 /**
@@ -115,6 +155,7 @@ export interface DocumentItem {
  */
 export interface UploadResponseData {
   url: string;
+  path?: string;
   name?: string;
   size?: number;
   originalName?: string;
@@ -144,19 +185,19 @@ export interface StudentCustomProfile {
   ataStatus: string;
   countryOfCitizenship: string;
   countryLivingIn: string;
-  gender: string;
-  dateOfBirth: string;
+  gender?: string;
+  dateOfBirth?: string;
   maritalStatus?: string;
   motherTongue?: string;
   otherLanguages?: string;
-  address: string;
-  city: string;
-  state: string;
+  address?: string;
+  city?: string;
+  state?: string;
   pincode?: string;
   currentProfession?: string;
-  highestEducation: string;
+  highestEducation?: string;
   theologicalQualifications?: string;
-  interestedCourse: string;
+  interestedCourse?: string;
   bornAgainDate?: string;
   baptismYear?: string;
   denomination?: string;
@@ -172,9 +213,32 @@ export interface StudentCustomProfile {
   theologicalDesire?: string;
   hobbies?: string;
   howDidYouHear?: string;
+  honors?: string;
   specialHonors?: string;
   documents?: StudentDocuments;
   declarationAccepted: boolean;
+  [key: string]: unknown;
+}
+
+export interface StudentRegistrationUser {
+  id: string;
+  fullName: string;
+  email: string;
+  mobile?: string;
+  role?: string;
+  status?: string;
+  ataStatus?: string;
+  organizationCode?: string;
+  regionId?: string;
+  customProfile?: StudentCustomProfile;
+}
+
+export interface StudentRegistrationResponse {
+  user?: StudentRegistrationUser;
+  accessToken?: string;
+  refreshToken?: string;
+  status?: string;
+  message?: string;
 }
 
 /**
@@ -222,6 +286,19 @@ export interface LoginResponseData {
 }
 
 /**
+ * Change Password Request Payload (POST /auth/change-password)
+ * Matches Postman Collection: '1. Authentication & Profile -> Change Password'
+ */
+export interface ChangePasswordPayload {
+  old_password: string;
+  new_password: string;
+}
+
+export interface ChangePasswordResponse {
+  message?: string;
+}
+
+/**
  * Published Course & Catalog Interfaces
  * Matches Postman Collection: '2. Programs, Courses & Enrollment'
  */
@@ -241,10 +318,67 @@ export interface CourseRegionalPrice {
 export interface CourseLesson {
   id: string;
   title: string;
+  description?: string;
   duration?: string;
+  durationMinutes?: number;
+  durationSeconds?: number;
   videoUrl?: string;
   hasCheckpoint?: boolean;
   order?: number;
+  completed?: boolean;
+  isCompleted?: boolean;
+  watchedSeconds?: number;
+  isLocked?: boolean;
+  locked?: boolean;
+  accessStatus?: string;
+  canWatch?: boolean;
+  rewatchAllowed?: boolean;
+  allowRewatch?: boolean;
+  watchLimitReached?: boolean;
+  maxWatchesReached?: boolean;
+  viewingRestricted?: boolean;
+  isWatched?: boolean;
+  fullyWatched?: boolean;
+}
+
+export interface LessonProgressEntry {
+  lessonId: string;
+  watchedSeconds: number;
+  completed: boolean;
+  completedAt?: string;
+  canWatch?: boolean;
+  rewatchAllowed?: boolean;
+  watchLimitReached?: boolean;
+  isLocked?: boolean;
+}
+
+export interface WatchTimeUpdateResponse {
+  lessonId?: string;
+  courseId?: string;
+  moduleId?: string;
+  watchedSeconds?: number;
+  progressPercentage?: number;
+  completed?: boolean;
+  isCompleted?: boolean;
+  isWatched?: boolean;
+  fullyWatched?: boolean;
+  canWatch?: boolean;
+  rewatchAllowed?: boolean;
+  allowRewatch?: boolean;
+  watchLimitReached?: boolean;
+  maxWatchesReached?: boolean;
+  viewingRestricted?: boolean;
+  message?: string;
+}
+
+export interface CourseProgressData {
+  progressPercentage: number;
+  completedLessons?: string[];
+  completedLessonIds?: string[];
+  lessonProgressById?: Record<string, LessonProgressEntry>;
+  watchedSecondsByLesson?: Record<string, number>;
+  currentLessonId?: string;
+  lastLessonId?: string;
 }
 
 export interface CourseModule {
@@ -374,26 +508,91 @@ export interface StudentProgramEnrollment {
   };
 }
 
+export interface LiveSessionFilterParams {
+  courseId?: string;
+  batchId?: string;
+}
+
 export interface LiveSessionItem {
   id: string;
+  _id?: string;
   title: string;
+  courseId?: string;
   courseTitle?: string;
+  course?: {
+    id?: string;
+    _id?: string;
+    title?: string;
+    name?: string;
+    code?: string;
+  };
+  batchId?: string;
+  batchName?: string;
+  batch?: {
+    id?: string;
+    _id?: string;
+    name?: string;
+    code?: string;
+  };
+  facultyId?: string;
+  instructorName?: string;
+  faculty?: {
+    id?: string;
+    _id?: string;
+    fullName?: string;
+    name?: string;
+  };
+  instructor?: {
+    id?: string;
+    _id?: string;
+    fullName?: string;
+    name?: string;
+  };
+  studentId?: string;
+  meetingType?: string;
   sessionNumber?: number;
   scheduledDate?: string;
   scheduledTime?: string;
+  startTime?: string;
+  endTime?: string;
   meetingUrl?: string;
+  joinUrl?: string;
+  meetingLink?: string;
   agenda?: string;
+  description?: string;
   hasAttended?: boolean;
+  attendees?: string[];
+  canJoin?: boolean;
   status?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface NotificationItem {
   id: string;
+  _id?: string;
   title: string;
   message: string;
   createdAt?: string;
+  readAt?: string;
   isRead?: boolean;
   type?: string;
+  link?: string;
+  actionUrl?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface NotificationsPaginationMeta {
+  page: number;
+  limit: number;
+  totalItems: number;
+  totalPages: number;
+  hasMore: boolean;
+}
+
+export interface NotificationsPaginatedResponse {
+  items: NotificationItem[];
+  meta: NotificationsPaginationMeta;
 }
 
 export interface StudentResultSummary {
@@ -514,30 +713,66 @@ export interface DashboardStats {
 /**
  * AI Learning Module Types
  * Matches Postman: GET /courses/:courseId/content/lessons/:lessonId/ai-data
+ * and POST /courses/:courseId/content/lessons/:lessonId/ai-quiz/submit
  */
 export interface LessonAiQuestion {
-  id?: string;
+  id: string;
   question: string;
   options: string[];
-  correctOptionIndex?: number;
+  correct_index?: number;
   explanation?: string;
+  theological_explanation?: string;
 }
 
-export interface LessonAiConcept {
-  title: string;
-  description: string;
-  historicalContext?: string;
-  category?: string;
+export interface LessonAiBackstoryItem {
+  topic: string;
+  explanation: string;
+}
+
+export interface LessonAiFlashcardItem {
+  id: string;
+  question: string;
+  answer: string;
+  topic?: string;
+}
+
+export interface LessonAiLatestAttempt {
+  id?: string;
+  score: number;
+  totalQuestions: number;
+  percentage?: number;
+  completedAt?: string;
+  attemptNumber?: number;
+  passed?: boolean;
+  answers?: { questionIndex: number; selectedOption: number }[];
 }
 
 export interface LessonAiStudyData {
-  summary?: string;
-  executiveBriefing?: string;
-  keyPoints?: string[];
-  quiz?: LessonAiQuestion[];
-  flashcards?: { front: string; back: string }[];
-  concepts?: LessonAiConcept[];
-  takeaways?: string[];
+  found: boolean;
+  hasAiData: boolean;
+  summary: string;
+  quiz_pool: LessonAiQuestion[];
+  total_pool_count?: number;
+  backstory: LessonAiBackstoryItem[];
+  flashcards?: LessonAiFlashcardItem[];
+  key_takeaways: string[];
+  latest_attempt?: LessonAiLatestAttempt | null;
+  generated_at?: string;
+}
+
+export interface LessonAiQuizSubmitAnswerPayload {
+  questionIndex: number;
+  selectedOption: number;
+}
+
+export interface LessonAiQuizSubmitResponse {
+  attempt?: LessonAiLatestAttempt | null;
+  latest_attempt?: LessonAiLatestAttempt | null;
+  score?: number;
+  totalQuestions?: number;
+  percentage?: number;
+  passed?: boolean;
+  message?: string;
 }
 
 /**
@@ -598,25 +833,25 @@ export interface ExamResultItem {
   id: string;
   _id?: string;
   examId?:
-    | {
-        id?: string;
-        _id?: string;
-        title?: string;
-        courseId?: { id?: string; _id?: string; title?: string };
-      }
-    | string;
+  | {
+    id?: string;
+    _id?: string;
+    title?: string;
+    courseId?: { id?: string; _id?: string; title?: string };
+  }
+  | string;
   exam?: {
     id?: string;
     _id?: string;
     title?: string;
   };
   courseId?:
-    | {
-        id?: string;
-        _id?: string;
-        title?: string;
-      }
-    | string;
+  | {
+    id?: string;
+    _id?: string;
+    title?: string;
+  }
+  | string;
   course?: {
     id?: string;
     _id?: string;
@@ -637,13 +872,13 @@ export interface ExamAttemptItem {
   id: string;
   _id?: string;
   examId?:
-    | {
-        id?: string;
-        _id?: string;
-        title?: string;
-        courseId?: { id?: string; _id?: string; title?: string };
-      }
-    | string;
+  | {
+    id?: string;
+    _id?: string;
+    title?: string;
+    courseId?: { id?: string; _id?: string; title?: string };
+  }
+  | string;
   attemptNumber?: number;
   marksObtained?: number;
   totalMarks?: number;
@@ -657,48 +892,241 @@ export interface ExamAttemptItem {
 }
 
 export interface AttemptReviewQuestion {
-  questionId: string;
+  questionId?: string;
+  id?: string;
+  _id?: string;
   questionText: string;
+  type?: string;
   options?: string[];
   selectedOption?: string | number;
   textAnswer?: string;
   correctOption?: string | number;
+  correctAnswer?: string;
   explanation?: string;
   marksAwarded?: number;
   maxMarks?: number;
+  marks?: number;
   isCorrect?: boolean;
 }
 
+export interface ExamAttemptDetailAnswer {
+  questionId: string;
+  selectedOption?: string;
+  textAnswer?: string;
+  fileUrl?: string;
+  fileName?: string;
+  marks?: number;
+  isGraded?: boolean;
+  isCorrect?: boolean;
+}
+
+export interface ExamAttemptDetail {
+  id: string;
+  _id?: string;
+  examId?: string;
+  studentId?: string;
+  attemptNumber?: number;
+  marksObtained?: number;
+  totalMarks?: number;
+  percentage?: number;
+  isPassed?: boolean;
+  status?: string;
+  answers?: ExamAttemptDetailAnswer[];
+  startedAt?: string;
+  submittedAt?: string;
+  createdAt?: string;
+}
+
 export interface AttemptReviewResponse {
-  attemptId: string;
-  examTitle: string;
-  score: number;
+  attempt?: ExamAttemptDetail;
+  questions?: AttemptReviewQuestion[];
+  examQuestions?: ExamQuestionItem[];
+  attemptId?: string;
+  examTitle?: string;
+  score?: number;
+  totalMarks?: number;
+  percentage?: number;
+  status?: string;
+  isPassed?: boolean;
+  AttemptQuestions?: AttemptReviewQuestion[];
+}
+
+export interface CourseAssignmentItem {
+  id: string;
+  _id?: string;
+  courseId?: string | { id?: string; _id?: string; title?: string };
+  title: string;
+  description?: string;
+  instructions?: string;
+  dueDate?: string;
+  totalMarks?: number;
+  isPublished?: boolean;
+  status?: string;
+  attachmentUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AssignmentSubmissionItem {
+  id?: string;
+  _id?: string;
+  assignmentId?: string;
+  studentId?: string;
+  fileUrl?: string;
+  fileName?: string;
+  score?: number;
+  feedback?: string;
+  status?: 'SUBMITTED' | 'GRADED' | 'PENDING' | string;
+  submittedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CourseExamItem {
+  id: string;
+  _id?: string;
+  courseId?: string | { id?: string; _id?: string; title?: string };
+  title: string;
+  description?: string;
+  instructions?: string;
+  durationMinutes: number;
   totalMarks: number;
-  percentage: number;
-  status: string;
-  questions: AttemptReviewQuestion[];
+  passingPercentage: number;
+  maxAttempts?: number;
+  isPublished?: boolean;
+  status?: string;
+  isFinalExam?: boolean;
+  startDate?: string;
+  endDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ExamQuestionOption {
+  id?: string;
+  _id?: string;
+  text: string;
+  isCorrect?: boolean;
+}
+
+export interface ExamQuestionItem {
+  id: string;
+  _id?: string;
+  examId?: string;
+  questionText: string;
+  type: 'MCQ' | 'TRUE_FALSE' | 'SHORT_ANSWER' | 'ESSAY' | 'BOOK_REVIEW' | 'RESEARCH_PAPER' | string;
+  marks: number;
+  options?: ExamQuestionOption[];
+  correctAnswer?: string;
+  attachmentUrl?: string;
+  order?: number;
+}
+
+export interface ExamStartAttemptResponse {
+  id: string;
+  _id?: string;
+  examId?: string;
+  studentId?: string;
+  attemptNumber?: number;
+  status?: string;
+  createdAt: string;
+  durationMinutes?: number;
+  startedAt?: string;
+}
+
+export interface ExamAnswerDraftPayload {
+  questionId: string;
+  selectedOption?: string;
+  textAnswer?: string;
+  fileUrl?: string;
+  fileName?: string;
+}
+
+export interface ExamSubmitAnswerItem {
+  questionId: string;
+  selectedOption?: string;
+  textAnswer?: string;
+  fileUrl?: string;
+  fileName?: string;
+}
+
+export interface ExamSubmitPayload {
+  answers: ExamSubmitAnswerItem[];
+}
+
+export interface VideoQuizOptionItem {
+  text: string;
+  isCorrect?: boolean;
+  _id?: string;
+  id?: string;
+}
+
+export interface VideoQuizItem {
+  id?: string;
+  _id?: string;
+  moduleId?: string;
+  lessonId?: string;
+  type?: 'MCQ' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'THEORY';
+  questionText: string;
+  options?: (string | VideoQuizOptionItem)[];
+  correctOptionIndex?: number;
+  timestampSeconds?: number;
+  marks?: number;
+  maxMarks?: number;
+  explanation?: string;
+}
+
+export interface VideoQuizSubmitPayload {
+  selectedOption?: number | string;
+  answerText?: string;
+}
+
+export interface VideoQuizSubmitResponse {
+  success?: boolean;
+  message?: string;
+  isCorrect?: boolean;
+  score?: number;
+  marks?: number;
+  feedback?: string;
+  data?: any;
+}
+
+export interface VideoQuizMyAnswerItem {
+  id?: string;
+  _id?: string;
+  quizId?: VideoQuizItem | string;
+  selectedOption?: number | string;
+  answerText?: string;
+  textAnswer?: string;
+  isCorrect?: boolean;
+  isGraded?: boolean;
+  score?: number;
+  marks?: number;
+  feedback?: string;
+  createdAt?: string;
+  submittedAt?: string;
 }
 
 export interface VideoQuizResultItem {
   id: string;
   _id?: string;
   lessonId?:
-    | {
-        id?: string;
-        _id?: string;
-        title?: string;
-        courseId?: { id?: string; _id?: string; title?: string };
-      }
-    | string;
+  | {
+    id?: string;
+    _id?: string;
+    title?: string;
+    courseId?: { id?: string; _id?: string; title?: string };
+  }
+  | string;
   quizId?:
-    | {
-        id?: string;
-        _id?: string;
-        questionText?: string;
-        maxMarks?: number;
-        options?: string[];
-      }
-    | string;
+  | {
+    id?: string;
+    _id?: string;
+    questionText?: string;
+    maxMarks?: number;
+    options?: string[];
+  }
+  | string;
   marks?: number;
   isGraded?: boolean;
   isCorrect?: boolean;

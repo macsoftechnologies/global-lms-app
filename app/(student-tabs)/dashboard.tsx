@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -16,7 +16,7 @@ import {
   Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
 import { AuthStorage, AuthSession } from '../../src/services/authStorage';
@@ -24,17 +24,25 @@ import { LmsAuthService } from '../../src/services/lmsAuthService';
 import { DashboardService } from '../../src/services/dashboardService';
 import { ChatService } from '../../src/services/chatService';
 import { ChatPanel, NotificationBadge } from '../../src/components/chat';
+import { ENV } from '../../src/config/env';
 import {
   DashboardStats,
   StudentEnrollmentItem,
   StudentProgramEnrollment,
   LiveSessionItem,
-  NotificationItem,
   StudentResultSummary,
   CertificateItem,
   PaymentRecord,
   ProgramOption,
 } from '../../src/types';
+
+function resolveThumbnailUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const backendBase = ENV.API_URL.replace(/\/api\/v1\/?$/, '');
+  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  return `${backendBase}${cleanPath}`;
+}
 
 type ActiveTab =
   | 'dashboard'
@@ -53,37 +61,6 @@ interface ProgramItem {
   degreeType: string;
 }
 
-const AVAILABLE_PROGRAMS: ProgramItem[] = [
-  {
-    id: 'prog-bth',
-    name: 'Bachelor of Theology (B.Th)',
-    duration: '3 Years • 6 Semesters',
-    accreditation: 'ATA Accredited',
-    degreeType: 'Undergraduate Degree',
-  },
-  {
-    id: 'prog-mdiv',
-    name: 'Master of Divinity (M.Div)',
-    duration: '3 Years • 6 Semesters',
-    accreditation: 'ATA Accredited',
-    degreeType: 'Postgraduate Degree',
-  },
-  {
-    id: 'prog-dipth',
-    name: 'Diploma in Theology (Dip.Th)',
-    duration: '2 Years • 4 Semesters',
-    accreditation: 'Direct Track',
-    degreeType: 'Diploma Program',
-  },
-  {
-    id: 'prog-ccm',
-    name: 'Certificate in Christian Ministry (CCM)',
-    duration: '1 Year • Online Track',
-    accreditation: 'Ministry Foundation',
-    degreeType: 'Certificate Program',
-  },
-];
-
 export default function StudentDashboardScreen() {
   const { width } = useWindowDimensions();
   const isLargeScreen = width >= 900;
@@ -92,7 +69,6 @@ export default function StudentDashboardScreen() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showProgramsModal, setShowProgramsModal] = useState(false);
-  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(1);
@@ -110,7 +86,8 @@ export default function StudentDashboardScreen() {
   const [enrolledPrograms, setEnrolledPrograms] = useState<StudentProgramEnrollment[]>([]);
   const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
   const [availablePrograms, setAvailablePrograms] = useState<ProgramOption[]>([]);
-  const [notificationsList, setNotificationsList] = useState<NotificationItem[]>([]);
+  const [isLoadingPublicPrograms, setIsLoadingPublicPrograms] = useState<boolean>(true);
+  const [publicProgramsError, setPublicProgramsError] = useState<string | null>(null);
   const [resultsData, setResultsData] = useState<StudentResultSummary | null>(null);
   const [certificatesList, setCertificatesList] = useState<CertificateItem[]>([]);
   const [paymentsList, setPaymentsList] = useState<PaymentRecord[]>([]);
@@ -165,14 +142,29 @@ export default function StudentDashboardScreen() {
         // keep fallback
       }
 
-      if (publicProgramsRes.data && publicProgramsRes.data.length > 0) {
+      if (publicProgramsRes.success && publicProgramsRes.data) {
         setAvailablePrograms(publicProgramsRes.data);
+        setPublicProgramsError(null);
+      } else if (!publicProgramsRes.success) {
+        setPublicProgramsError(publicProgramsRes.error || 'Could not load available programs.');
       }
     } catch (err) {
       console.warn('[StudentDashboard] Error refreshing dashboard data:', err);
     } finally {
       setIsRefreshing(false);
     }
+  }, []);
+
+  const loadAvailablePublicPrograms = useCallback(async (forceRefresh = false) => {
+    setIsLoadingPublicPrograms(true);
+    setPublicProgramsError(null);
+    const res = await DashboardService.getPublicPrograms(100, undefined, { forceRefresh });
+    if (res.success && res.data) {
+      setAvailablePrograms(res.data);
+    } else {
+      setPublicProgramsError(res.error || 'Unable to fetch programs catalog.');
+    }
+    setIsLoadingPublicPrograms(false);
   }, []);
 
   useEffect(() => {
@@ -214,8 +206,14 @@ export default function StudentDashboardScreen() {
     });
 
     DashboardService.getPublicPrograms(100).then((publicProgramsRes) => {
-      if (!active || !publicProgramsRes.data || publicProgramsRes.data.length === 0) return;
-      setAvailablePrograms(publicProgramsRes.data);
+      if (!active) return;
+      if (publicProgramsRes.success && publicProgramsRes.data) {
+        setAvailablePrograms(publicProgramsRes.data);
+        setPublicProgramsError(null);
+      } else {
+        setPublicProgramsError(publicProgramsRes.error || 'Could not load available programs.');
+      }
+      setIsLoadingPublicPrograms(false);
     });
 
     return () => {
@@ -282,14 +280,64 @@ export default function StudentDashboardScreen() {
     }
   };
 
-  // Load notifications when modal opens
-  useEffect(() => {
-    if (showNotificationsModal && notificationsList.length === 0) {
-      DashboardService.getNotifications().then((res) => {
-        if (res.data) setNotificationsList(res.data);
+  // Refresh enrollments, stats, unread notifications & live sessions whenever dashboard gains focus
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      AuthStorage.getUser().then((storedUser) => {
+        if (!active) return;
+        const studentId = storedUser?.id || 'me';
+
+        DashboardService.getStudentEnrollments(studentId)
+          .then((enrollmentsRes) => {
+            if (active && enrollmentsRes.data) {
+              setEnrollments(enrollmentsRes.data);
+              setStats(DashboardService.computeDashboardStats(enrollmentsRes.data));
+            }
+          })
+          .catch(() => {});
+
+        DashboardService.getStudentPrograms(studentId)
+          .then((programsRes) => {
+            if (active && programsRes.data) {
+              setEnrolledPrograms(programsRes.data);
+            }
+          })
+          .catch(() => {});
       });
-    }
-  }, [showNotificationsModal, notificationsList.length]);
+
+      DashboardService.getUnreadNotificationCount()
+        .then((count) => {
+          if (active) setUnreadNotifications(count);
+        })
+        .catch(() => {});
+
+      DashboardService.getUpcomingLiveSessions()
+        .then((res) => {
+          if (active && res.success && res.data) {
+            setLiveSessions(res.data);
+          }
+        })
+        .catch(() => {});
+
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
+
+  // Standalone courses that are genuinely in progress (< 100%, not completed)
+  const inProgressCourses = useMemo(() => {
+    const active = enrollments.filter((enr) => {
+      const progress = typeof enr.progressPercentage === 'number' ? enr.progressPercentage : Number(enr.progressPercentage) || 0;
+      const status = (enr.status || '').toUpperCase();
+      return progress < 100 && status !== 'COMPLETED';
+    });
+    const standalone = active.filter((enr) => !enr.programId && !(enr as any).program);
+    if (standalone.length > 0) return standalone;
+    return active;
+  }, [enrollments]);
 
   // Format student display name (fallback to 'jushal' as in screenshot)
   const studentFullName = user?.fullName || 'jushal';
@@ -533,7 +581,7 @@ export default function StudentDashboardScreen() {
           style={styles.navItem}
           onPress={() => {
             setIsSidebarOpen(false);
-            setShowNotificationsModal(true);
+            router.push('/student/notifications');
           }}
           activeOpacity={0.7}
         >
@@ -654,34 +702,43 @@ export default function StudentDashboardScreen() {
               <View style={styles.mobileBrandInline}>
                 <Image
                   source={require('../../assets/logo.png')}
-                  style={styles.mobileLogoImage}
+                  style={[styles.mobileLogoImage, width < 390 && { width: 28, height: 28 }]}
                   resizeMode="contain"
                 />
-                <View style={{ marginLeft: 8 }}>
-                  <Text style={[styles.mobileBrandName, isDarkMode && { color: '#F8FAFC' }]}>
+                <View style={{ marginLeft: 7, flexShrink: 1 }}>
+                  <Text
+                    style={[
+                      styles.mobileBrandName,
+                      width < 390 && { fontSize: 13 },
+                      isDarkMode && { color: '#F8FAFC' },
+                    ]}
+                    numberOfLines={1}
+                  >
                     Cotr Global Online
                   </Text>
+                  {width < 430 && (
+                    <Text style={[styles.mobileBrandSub, isDarkMode && { color: '#60A5FA' }]}>
+                      STUDENT
+                    </Text>
+                  )}
                 </View>
-                <View style={styles.mobileBadgeSmall}>
-                  <Text style={styles.mobileBadgeText}>STUDENT</Text>
-                </View>
+                {width >= 430 && (
+                  <View style={styles.mobileBadgeSmall}>
+                    <Text style={styles.mobileBadgeText}>STUDENT</Text>
+                  </View>
+                )}
               </View>
             )}
 
             {/* Right: Action Buttons & Profile (Video Call | Chat | Notifications | Profile) */}
-            <View style={styles.topBarActions}>
-              {/* 1. Video Call Icon (Screenshot Matched) */}
+            <View style={[styles.topBarActions, width < 390 && { gap: 5 }]}>
+              {/* 1. Video Call Icon -> Live Sessions */}
               <TouchableOpacity
                 style={[
                   styles.headerVideoButton,
                   isDarkMode && { backgroundColor: '#1E293B' },
                 ]}
-                onPress={() =>
-                  Alert.alert(
-                    'Live Classroom',
-                    'No active live stream sessions right now. Check back during scheduled class hours.'
-                  )
-                }
+                onPress={() => router.push('/student/live-sessions')}
                 activeOpacity={0.8}
               >
                 <Ionicons name="videocam-outline" size={19} color={isDarkMode ? '#F8FAFC' : '#1E293B'} />
@@ -705,13 +762,13 @@ export default function StudentDashboardScreen() {
                 )}
               </TouchableOpacity>
 
-              {/* 3. Notification Bell with Badge */}
+              {/* 3. Notification Bell with Badge -> Notifications */}
               <TouchableOpacity
                 style={[
                   styles.actionIconButton,
                   isDarkMode && { backgroundColor: '#1E293B' },
                 ]}
-                onPress={() => setShowNotificationsModal(true)}
+                onPress={() => router.push('/student/notifications')}
                 activeOpacity={0.8}
               >
                 <Ionicons
@@ -803,7 +860,11 @@ export default function StudentDashboardScreen() {
 
                 {/* Upcoming Live Interactive Session Banner (Screen 5 API 5.3) */}
                 {liveSessions.length > 0 && (
-                  <View style={[styles.liveBannerCard, isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' }]}>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => router.push('/student/live-sessions')}
+                    style={[styles.liveBannerCard, isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' }]}
+                  >
                     <View style={[styles.liveBannerIcon, isDarkMode && { backgroundColor: '#2E1065' }]}>
                       <Ionicons name="videocam" size={24} color="#A78BFA" />
                     </View>
@@ -828,8 +889,10 @@ export default function StudentDashboardScreen() {
                       >
                         <Text style={styles.liveJoinBtnText}>Join</Text>
                       </TouchableOpacity>
-                    ) : null}
-                  </View>
+                    ) : (
+                      <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                    )}
+                  </TouchableOpacity>
                 )}
 
                 {/* 4 Stat Cards Row (Dynamically computed from API enrollments) */}
@@ -951,21 +1014,20 @@ export default function StudentDashboardScreen() {
                   ))
                 )}
 
-                {/* Section 2: Standalone Courses (Screen 5 API 5.1) */}
+                {/* Section 2: Standalone Courses (In Progress) */}
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionIndicator} />
-                  <Text style={[styles.sectionTitle, isDarkMode && { color: '#F8FAFC' }]}>Standalone Courses</Text>
+                  <Text style={[styles.sectionTitle, isDarkMode && { color: '#F8FAFC' }]}>In Progress Courses</Text>
                 </View>
 
-                {enrollments.length === 0 ? (
+                {inProgressCourses.length === 0 ? (
                   <View style={[styles.emptyStateCard, isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' }]}>
                     <View style={[styles.emptyIconCircle, isDarkMode && { backgroundColor: '#2E1065' }]}>
                       <Ionicons name="library-outline" size={34} color="#A78BFA" />
                     </View>
                     <Text style={[styles.emptyTitle, isDarkMode && { color: '#F8FAFC' }]}>Nothing in progress</Text>
                     <Text style={[styles.emptySubtitle, isDarkMode && { color: '#94A3B8' }]}>
-                      Enroll in a standalone course to start your learning
-                      journey.
+                      Enroll in a course to start your learning journey.
                     </Text>
                     <TouchableOpacity
                       style={styles.browseButton}
@@ -976,8 +1038,9 @@ export default function StudentDashboardScreen() {
                     </TouchableOpacity>
                   </View>
                 ) : (
-                  enrollments.map((enr, idx) => {
+                  inProgressCourses.map((enr: StudentEnrollmentItem, idx: number) => {
                     const cId = enr.courseId || enr.course?.id || enr.id;
+                    const thumbUrl = resolveThumbnailUrl(enr.course?.thumbnailUrl || (enr.course as any)?.thumbnail);
                     return (
                       <TouchableOpacity
                         key={enr.id || `enr_${idx}`}
@@ -996,21 +1059,31 @@ export default function StudentDashboardScreen() {
                         }}
                         activeOpacity={0.8}
                       >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                          <View style={[styles.courseIconCircle, isDarkMode && { backgroundColor: '#2E1065' }]}>
-                            <Ionicons name="book" size={20} color="#A78BFA" />
-                          </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                          {thumbUrl ? (
+                            <Image
+                              source={{ uri: thumbUrl }}
+                              style={styles.courseThumbImage}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View style={[styles.courseIconCircle, isDarkMode && { backgroundColor: '#2E1065' }]}>
+                              <Ionicons name="book" size={20} color="#A78BFA" />
+                            </View>
+                          )}
                           <View style={{ flex: 1, marginLeft: 12 }}>
-                            <Text style={[styles.enrolledCourseTitle, isDarkMode && { color: '#F8FAFC' }]}>
+                            <Text style={[styles.enrolledCourseTitle, isDarkMode && { color: '#F8FAFC' }]} numberOfLines={1}>
                               {enr.course?.title || 'Academic Course'}
                             </Text>
                             <Text style={[styles.enrolledCourseSubtitle, isDarkMode && { color: '#94A3B8' }]}>
                               {enr.course?.creditHours ? `${enr.course.creditHours} Credits • ` : ''}Course Subject
                             </Text>
                           </View>
-                          <Text style={styles.enrolledCoursePercent}>
-                            {enr.progressPercentage || 0}%
-                          </Text>
+                          <View style={[styles.percentBadge, isDarkMode && { backgroundColor: 'rgba(99, 102, 241, 0.2)' }]}>
+                            <Text style={styles.enrolledCoursePercent}>
+                              {enr.progressPercentage || 0}%
+                            </Text>
+                          </View>
                         </View>
                         {/* Progress Bar */}
                         <View style={[styles.courseProgressBarBg, isDarkMode && { backgroundColor: '#1E293B' }]}>
@@ -1020,6 +1093,15 @@ export default function StudentDashboardScreen() {
                               { width: `${Math.min(100, Math.max(0, enr.progressPercentage || 0))}%` },
                             ]}
                           />
+                        </View>
+                        <View style={styles.courseCardFooter}>
+                          <Text style={[styles.courseCardStatus, isDarkMode && { color: '#94A3B8' }]}>
+                            {enr.progressPercentage ? `${enr.progressPercentage}% completed` : 'Start lesson'}
+                          </Text>
+                          <View style={styles.resumePill}>
+                            <Text style={styles.resumePillText}>Resume</Text>
+                            <Ionicons name="arrow-forward" size={12} color="#FFFFFF" style={{ marginLeft: 4 }} />
+                          </View>
                         </View>
                       </TouchableOpacity>
                     );
@@ -1456,36 +1538,60 @@ export default function StudentDashboardScreen() {
               style={{ maxHeight: 420 }}
               showsVerticalScrollIndicator={false}
             >
-              {(availablePrograms.length > 0
-                ? availablePrograms.map((p) => ({
-                  id: p.id,
-                  name: p.name,
-                  duration: 'Academic Term • Online',
-                  accreditation: 'Accredited',
-                  degreeType: p.description || 'Degree Program',
-                }))
-                : AVAILABLE_PROGRAMS
-              ).map((prog) => (
-                <View key={prog.id} style={styles.programCardItem}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.progItemName}>{prog.name}</Text>
-                    <Text style={styles.progItemDuration}>
-                      {prog.duration} • {prog.degreeType}
-                    </Text>
-                    <View style={styles.accreditationTag}>
-                      <Text style={styles.accreditationText}>
-                        {prog.accreditation}
-                      </Text>
-                    </View>
-                  </View>
+              {isLoadingPublicPrograms && availablePrograms.length === 0 ? (
+                <View style={{ paddingVertical: 32, alignItems: 'center', gap: 10 }}>
+                  <ActivityIndicator size="small" color="#2563EB" />
+                  <Text style={styles.progItemDuration}>Loading programs from server...</Text>
+                </View>
+              ) : publicProgramsError && availablePrograms.length === 0 ? (
+                <View style={{ paddingVertical: 28, alignItems: 'center', gap: 12 }}>
+                  <Text style={[styles.progItemDuration, { textAlign: 'center', color: '#DC2626' }]}>
+                    {publicProgramsError}
+                  </Text>
                   <TouchableOpacity
                     style={styles.enrollItemButton}
-                    onPress={() => handleEnrollProgram(prog)}
+                    onPress={() => loadAvailablePublicPrograms(true)}
                   >
-                    <Text style={styles.enrollItemButtonText}>Enroll</Text>
+                    <Text style={styles.enrollItemButtonText}>Retry</Text>
                   </TouchableOpacity>
                 </View>
-              ))}
+              ) : availablePrograms.length === 0 ? (
+                <View style={{ paddingVertical: 32, alignItems: 'center' }}>
+                  <Text style={[styles.progItemDuration, { textAlign: 'center' }]}>
+                    No published programs are currently available.
+                  </Text>
+                </View>
+              ) : (
+                availablePrograms
+                  .map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                    duration: 'Academic Term • Online',
+                    accreditation: 'Accredited',
+                    degreeType: p.description || 'Degree Program',
+                  }))
+                  .map((prog) => (
+                    <View key={prog.id} style={styles.programCardItem}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.progItemName}>{prog.name}</Text>
+                        <Text style={styles.progItemDuration}>
+                          {prog.duration} • {prog.degreeType}
+                        </Text>
+                        <View style={styles.accreditationTag}>
+                          <Text style={styles.accreditationText}>
+                            {prog.accreditation}
+                          </Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.enrollItemButton}
+                        onPress={() => handleEnrollProgram(prog)}
+                      >
+                        <Text style={styles.enrollItemButtonText}>Enroll</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))
+              )}
             </ScrollView>
 
             <TouchableOpacity
@@ -1493,93 +1599,6 @@ export default function StudentDashboardScreen() {
               onPress={() => setShowProgramsModal(false)}
             >
               <Text style={styles.closeModalButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* MODAL: Notifications */}
-      <Modal
-        visible={showNotificationsModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowNotificationsModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937', borderWidth: 1 }]}>
-            <View style={[styles.modalHeader, isDarkMode && { borderBottomColor: '#1F2937' }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons
-                  name="notifications"
-                  size={20}
-                  color="#6366F1"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={[styles.modalTitle, isDarkMode && { color: '#F8FAFC' }]}>Notifications</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => {
-                  setUnreadNotifications(0);
-                  setShowNotificationsModal(false);
-                }}
-              >
-                <Ionicons name="close" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} />
-              </TouchableOpacity>
-            </View>
-
-            {notificationsList.length > 0 ? (
-              notificationsList.map((notif) => (
-                <View key={notif.id} style={[styles.notificationItem, isDarkMode && { borderBottomColor: '#1F2937' }]}>
-                  <View style={[styles.notifIconCircle, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-                    <Ionicons name="notifications-outline" size={20} color="#818CF8" />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.notifTitle, isDarkMode && { color: '#F8FAFC' }]}>{notif.title}</Text>
-                    <Text style={[styles.notifBody, isDarkMode && { color: '#94A3B8' }]}>{notif.message}</Text>
-                    <Text style={[styles.notifTime, isDarkMode && { color: '#64748B' }]}>
-                      {notif.createdAt ? new Date(notif.createdAt).toLocaleDateString() : 'Recent'}
-                    </Text>
-                  </View>
-                </View>
-              ))
-            ) : (
-              <>
-                <View style={[styles.notificationItem, isDarkMode && { borderBottomColor: '#1F2937' }]}>
-                  <View style={[styles.notifIconCircle, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-                    <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.notifTitle, isDarkMode && { color: '#F8FAFC' }]}>Welcome to Cotr Global Online</Text>
-                    <Text style={[styles.notifBody, isDarkMode && { color: '#94A3B8' }]}>
-                      Your student account has been created. Explore your dashboard and browse programs.
-                    </Text>
-                    <Text style={[styles.notifTime, isDarkMode && { color: '#64748B' }]}>Just now</Text>
-                  </View>
-                </View>
-
-                <View style={[styles.notificationItem, isDarkMode && { borderBottomColor: '#1F2937' }]}>
-                  <View style={[styles.notifIconCircle, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
-                    <Ionicons name="calendar-outline" size={20} color="#38BDF8" />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.notifTitle, isDarkMode && { color: '#F8FAFC' }]}>Academic Calendar Published</Text>
-                    <Text style={[styles.notifBody, isDarkMode && { color: '#94A3B8' }]}>
-                      The term calendar for 2026-2027 is now available in the student portal.
-                    </Text>
-                    <Text style={[styles.notifTime, isDarkMode && { color: '#64748B' }]}>1 hour ago</Text>
-                  </View>
-                </View>
-              </>
-            )}
-
-            <TouchableOpacity
-              style={[styles.closeModalButton, isDarkMode && { backgroundColor: '#1E293B' }]}
-              onPress={() => {
-                setUnreadNotifications(0);
-                setShowNotificationsModal(false);
-              }}
-            >
-              <Text style={[styles.closeModalButtonText, isDarkMode && { color: '#CBD5E1' }]}>Mark all as read</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1631,6 +1650,18 @@ export default function StudentDashboardScreen() {
             >
               <Ionicons name="person-outline" size={18} color={isDarkMode ? '#94A3B8' : '#1E293B'} />
               <Text style={[styles.profileActionText, isDarkMode && { color: '#F8FAFC' }]}>View Full Profile</Text>
+              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.profileActionRow, isDarkMode && { borderBottomColor: '#1F2937' }]}
+              onPress={() => {
+                setShowProfileModal(false);
+                router.push('/student/change-password');
+              }}
+            >
+              <Ionicons name="key-outline" size={18} color={isDarkMode ? '#94A3B8' : '#1E293B'} />
+              <Text style={[styles.profileActionText, isDarkMode && { color: '#F8FAFC' }]}>Change Password</Text>
               <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
             </TouchableOpacity>
 
@@ -1829,9 +1860,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   mobileBrandInline: {
+    flex: 1,
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
     marginLeft: 6,
+    marginRight: 8,
   },
   mobileLogoImage: {
     width: 32,
@@ -1862,6 +1896,7 @@ const styles = StyleSheet.create({
   topBarActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
     gap: 8,
   },
   headerVideoButton: {
@@ -2045,41 +2080,35 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    minWidth: 160,
+    minWidth: 155,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 18,
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   statCardBlue: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#4F46E5',
-    borderTopWidth: 3,
-    borderTopColor: '#4F46E5',
+    borderColor: '#E0E7FF',
   },
   statCardPurple: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#8B5CF6',
-    borderTopWidth: 3,
-    borderTopColor: '#8B5CF6',
+    borderColor: '#EDE9FE',
   },
   statCardGreen: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#10B981',
-    borderTopWidth: 3,
-    borderTopColor: '#10B981',
+    borderColor: '#D1FAE5',
   },
   statCardCyan: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#0284C7',
-    borderTopWidth: 3,
-    borderTopColor: '#0284C7',
+    borderColor: '#E0F2FE',
   },
   statCardHeader: {
     flexDirection: 'row',
@@ -2091,12 +2120,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#64748B',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
   statIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2113,9 +2142,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#ECFEFF',
   },
   statValue: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
     color: '#0F172A',
+    letterSpacing: -0.5,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -2579,27 +2609,39 @@ const styles = StyleSheet.create({
   // Dynamic Enrolled Course Card
   enrolledCourseCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    marginBottom: 14,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  courseThumbImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
   },
   courseIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: '#F3EEFE',
     alignItems: 'center',
     justifyContent: 'center',
   },
   enrolledCourseTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
   },
@@ -2608,10 +2650,16 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
+  percentBadge: {
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
   enrolledCoursePercent: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#7C3AED',
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#6366F1',
   },
   courseProgressBarBg: {
     height: 6,
@@ -2621,7 +2669,31 @@ const styles = StyleSheet.create({
   },
   courseProgressBarFill: {
     height: '100%',
-    backgroundColor: '#7C3AED',
+    backgroundColor: '#6366F1',
     borderRadius: 3,
+  },
+  courseCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  courseCardStatus: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  resumePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#6366F1',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  resumePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

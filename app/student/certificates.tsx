@@ -380,12 +380,12 @@ export default function StudentCertificatesScreen() {
           </View>
         ) : certificates.length === 0 ? (
           /* Empty State (strictly matching requirements) */
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconCircle}>
-              <Ionicons name="ribbon-outline" size={44} color="#7C3AED" />
+          <View style={[styles.emptyContainer, isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' }]}>
+            <View style={[styles.emptyIconCircle, isDarkMode && { backgroundColor: '#2E1065' }]}>
+              <Ionicons name="ribbon-outline" size={44} color="#A78BFA" />
             </View>
-            <Text style={styles.emptyTitle}>No certificates available yet.</Text>
-            <Text style={styles.emptyDescription}>
+            <Text style={[styles.emptyTitle, isDarkMode && { color: '#F8FAFC' }]}>No certificates available yet.</Text>
+            <Text style={[styles.emptyDescription, isDarkMode && { color: '#94A3B8' }]}>
               Complete your enrolled degree courses and score passing grades on final examinations to earn accredited certificates of completion.
             </Text>
 
@@ -410,7 +410,7 @@ export default function StudentCertificatesScreen() {
               const hasUrl = Boolean(cert.certificateUrl || cert.pdfUrl || cert.fileUrl || cert.downloadUrl);
 
               return (
-                <View key={certId} style={styles.certificateCard}>
+                <View key={certId} style={[styles.certificateCard, isDarkMode && { backgroundColor: '#161F30', borderColor: '#1F2937' }]}>
                   {/* Left Accent Bar */}
                   <View
                     style={[
@@ -429,14 +429,14 @@ export default function StudentCertificatesScreen() {
                   <View style={styles.cardMainContent}>
                     {/* Top Row: Ribbon Icon, Title & Status */}
                     <View style={styles.cardHeaderRow}>
-                      <View style={styles.cardIconBox}>
+                      <View style={[styles.cardIconBox, isDarkMode && { backgroundColor: '#1E293B' }]}>
                         <Ionicons name="ribbon" size={24} color="#D97706" />
                       </View>
                       <View style={styles.cardHeaderTitles}>
-                        <Text style={styles.cardTitle} numberOfLines={2}>
+                        <Text style={[styles.cardTitle, isDarkMode && { color: '#F8FAFC' }]} numberOfLines={2}>
                           {title}
                         </Text>
-                        <Text style={styles.cardSubtitle} numberOfLines={1}>
+                        <Text style={[styles.cardSubtitle, isDarkMode && { color: '#94A3B8' }]} numberOfLines={1}>
                           {courseOrProgram}
                         </Text>
                       </View>
@@ -446,29 +446,29 @@ export default function StudentCertificatesScreen() {
                     {/* Metadata Row: ID & Issue Date */}
                     <View style={styles.cardMetaRow}>
                       <View style={styles.metaItem}>
-                        <Text style={styles.metaLabel}>CERTIFICATE NO</Text>
-                        <Text style={styles.metaValue} numberOfLines={1}>
+                        <Text style={[styles.metaLabel, isDarkMode && { color: '#94A3B8' }]}>CERTIFICATE NO</Text>
+                        <Text style={[styles.metaValue, isDarkMode && { color: '#F8FAFC' }]} numberOfLines={1}>
                           {certNo}
                         </Text>
                       </View>
 
-                      <View style={styles.metaDivider} />
+                      <View style={[styles.metaDivider, isDarkMode && { backgroundColor: '#1F2937' }]} />
 
                       <View style={styles.metaItem}>
-                        <Text style={styles.metaLabel}>ISSUE DATE</Text>
-                        <Text style={styles.metaValue}>{issueDate}</Text>
+                        <Text style={[styles.metaLabel, isDarkMode && { color: '#94A3B8' }]}>ISSUE DATE</Text>
+                        <Text style={[styles.metaValue, isDarkMode && { color: '#F8FAFC' }]}>{issueDate}</Text>
                       </View>
                     </View>
 
                     {/* Bottom Actions Row */}
                     <View style={styles.cardActionsRow}>
                       <TouchableOpacity
-                        style={styles.viewActionBtn}
+                        style={[styles.viewActionBtn, isDarkMode && { backgroundColor: '#1E293B' }]}
                         onPress={() => handleViewCertificate(cert)}
                         activeOpacity={0.75}
                       >
-                        <Ionicons name="eye-outline" size={16} color="#4F46E5" style={{ marginRight: 4 }} />
-                        <Text style={styles.viewActionBtnText}>View Details</Text>
+                        <Ionicons name="eye-outline" size={16} color={isDarkMode ? '#818CF8' : '#4F46E5'} style={{ marginRight: 4 }} />
+                        <Text style={[styles.viewActionBtnText, isDarkMode && { color: '#818CF8' }]}>View Details</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
@@ -518,45 +518,48 @@ export default function StudentCertificatesScreen() {
       {/* ========================================================================= */}
       <Modal visible={!!selectedCertificate} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheetContainer}>
+          <View style={[styles.modalSheetContainer, isDarkMode && { backgroundColor: '#161F30' }]}>
             {/* Modal Header */}
-            <View style={styles.modalHeaderRow}>
+            <View style={[styles.modalHeaderRow, isDarkMode && { borderBottomColor: '#1F2937' }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                 <View style={[styles.cardIconBox, { backgroundColor: '#FEF3C7', marginRight: 10 }]}>
                   <Ionicons name="ribbon" size={22} color="#D97706" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.modalTitle} numberOfLines={1}>
+                  <Text style={[styles.modalTitle, isDarkMode && { color: '#F8FAFC' }]} numberOfLines={1}>
                     Certificate Details
                   </Text>
-                  <Text style={{ fontSize: 11, color: '#64748B' }}>
+                  <Text style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B' }}>
                     Official Academic Credential
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={() => setSelectedCertificate(null)} style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={20} color="#64748B" />
+              <TouchableOpacity
+                onPress={() => setSelectedCertificate(null)}
+                style={[styles.modalCloseBtn, isDarkMode && { backgroundColor: '#1E293B' }]}
+              >
+                <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
               </TouchableOpacity>
             </View>
 
             {isLoadingDetails ? (
               <View style={{ padding: 40, alignItems: 'center' }}>
                 <ActivityIndicator size="large" color="#4F46E5" />
-                <Text style={{ marginTop: 12, fontSize: 13, color: '#64748B' }}>
+                <Text style={{ marginTop: 12, fontSize: 13, color: isDarkMode ? '#94A3B8' : '#64748B' }}>
                   Loading certificate verification details...
                 </Text>
               </View>
             ) : selectedCertificate ? (
               <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollBody}>
                 {/* Certificate Banner */}
-                <View style={styles.certHeroBanner}>
+                <View style={[styles.certHeroBanner, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
                   <Text style={styles.certHeroEyebrow}>COTR GLOBAL ONLINE</Text>
-                  <Text style={styles.certHeroTitle}>
+                  <Text style={[styles.certHeroTitle, isDarkMode && { color: '#F8FAFC' }]}>
                     {selectedCertificate.title || selectedCertificate.courseTitle || 'Certificate of Completion'}
                   </Text>
-                  <Text style={styles.certHeroSubtitle}>
+                  <Text style={[styles.certHeroSubtitle, isDarkMode && { color: '#94A3B8' }]}>
                     Awarded to{' '}
-                    <Text style={{ fontWeight: '700', color: '#0F172A' }}>
+                    <Text style={{ fontWeight: '700', color: isDarkMode ? '#F8FAFC' : '#0F172A' }}>
                       {selectedCertificate.studentName || currentUser?.fullName || 'Enrolled Student'}
                     </Text>
                   </Text>
@@ -567,45 +570,45 @@ export default function StudentCertificatesScreen() {
 
                 {/* Detail Key-Value Rows */}
                 <View style={styles.modalDetailsList}>
-                  <View style={styles.modalDetailRow}>
-                    <Text style={styles.modalDetailLabel}>Certificate ID</Text>
-                    <Text style={styles.modalDetailValue} selectable>
+                  <View style={[styles.modalDetailRow, isDarkMode && { borderBottomColor: '#1F2937' }]}>
+                    <Text style={[styles.modalDetailLabel, isDarkMode && { color: '#94A3B8' }]}>Certificate ID</Text>
+                    <Text style={[styles.modalDetailValue, isDarkMode && { color: '#F8FAFC' }]} selectable>
                       {selectedCertificate.certificateNumber || selectedCertificate.id}
                     </Text>
                   </View>
 
-                  <View style={styles.modalDetailRow}>
-                    <Text style={styles.modalDetailLabel}>Course / Program</Text>
-                    <Text style={styles.modalDetailValue}>
+                  <View style={[styles.modalDetailRow, isDarkMode && { borderBottomColor: '#1F2937' }]}>
+                    <Text style={[styles.modalDetailLabel, isDarkMode && { color: '#94A3B8' }]}>Course / Program</Text>
+                    <Text style={[styles.modalDetailValue, isDarkMode && { color: '#F8FAFC' }]}>
                       {selectedCertificate.courseTitle || selectedCertificate.programName || '—'}
                     </Text>
                   </View>
 
-                  <View style={styles.modalDetailRow}>
-                    <Text style={styles.modalDetailLabel}>Issue Date</Text>
-                    <Text style={styles.modalDetailValue}>
+                  <View style={[styles.modalDetailRow, isDarkMode && { borderBottomColor: '#1F2937' }]}>
+                    <Text style={[styles.modalDetailLabel, isDarkMode && { color: '#94A3B8' }]}>Issue Date</Text>
+                    <Text style={[styles.modalDetailValue, isDarkMode && { color: '#F8FAFC' }]}>
                       {formatDate(selectedCertificate.issueDate || selectedCertificate.issuedAt || selectedCertificate.createdAt)}
                     </Text>
                   </View>
 
                   {selectedCertificate.grade && (
-                    <View style={styles.modalDetailRow}>
-                      <Text style={styles.modalDetailLabel}>Final Grade</Text>
+                    <View style={[styles.modalDetailRow, isDarkMode && { borderBottomColor: '#1F2937' }]}>
+                      <Text style={[styles.modalDetailLabel, isDarkMode && { color: '#94A3B8' }]}>Final Grade</Text>
                       <Text style={[styles.modalDetailValue, { color: '#059669', fontWeight: '700' }]}>
                         {selectedCertificate.grade} {selectedCertificate.score ? `(${selectedCertificate.score}%)` : ''}
                       </Text>
                     </View>
                   )}
 
-                  <View style={styles.modalDetailRow}>
-                    <Text style={styles.modalDetailLabel}>Accreditation</Text>
-                    <Text style={styles.modalDetailValue}>ATA Accredited</Text>
+                  <View style={[styles.modalDetailRow, isDarkMode && { borderBottomColor: '#1F2937' }]}>
+                    <Text style={[styles.modalDetailLabel, isDarkMode && { color: '#94A3B8' }]}>Accreditation</Text>
+                    <Text style={[styles.modalDetailValue, isDarkMode && { color: '#F8FAFC' }]}>ATA Accredited</Text>
                   </View>
 
                   {selectedCertificate.verificationCode && (
-                    <View style={styles.modalDetailRow}>
-                      <Text style={styles.modalDetailLabel}>Verification Code</Text>
-                      <Text style={[styles.modalDetailValue, { fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }]} selectable>
+                    <View style={[styles.modalDetailRow, isDarkMode && { borderBottomColor: '#1F2937' }]}>
+                      <Text style={[styles.modalDetailLabel, isDarkMode && { color: '#94A3B8' }]}>Verification Code</Text>
+                      <Text style={[styles.modalDetailValue, { fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }, isDarkMode && { color: '#F8FAFC' }]} selectable>
                         {selectedCertificate.verificationCode}
                       </Text>
                     </View>
@@ -622,9 +625,9 @@ export default function StudentCertificatesScreen() {
                     <Text style={styles.modalActionBtnText}>Download PDF Document</Text>
                   </TouchableOpacity>
                 ) : (
-                  <View style={styles.pendingDocBox}>
+                  <View style={[styles.pendingDocBox, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
                     <Ionicons name="time-outline" size={20} color="#64748B" style={{ marginRight: 8 }} />
-                    <Text style={styles.pendingDocText}>
+                    <Text style={[styles.pendingDocText, isDarkMode && { color: '#94A3B8' }]}>
                       Digital PDF document is processing by the registrar.
                     </Text>
                   </View>
@@ -633,10 +636,10 @@ export default function StudentCertificatesScreen() {
             ) : null}
 
             <TouchableOpacity
-              style={styles.modalCloseFooterBtn}
+              style={[styles.modalCloseFooterBtn, isDarkMode && { backgroundColor: '#1E293B' }]}
               onPress={() => setSelectedCertificate(null)}
             >
-              <Text style={styles.modalCloseFooterText}>Close</Text>
+              <Text style={[styles.modalCloseFooterText, isDarkMode && { color: '#CBD5E1' }]}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -647,15 +650,15 @@ export default function StudentCertificatesScreen() {
       {/* ========================================================================= */}
       <Modal visible={isRequestModalVisible} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheetContainer}>
-            <View style={styles.modalHeaderRow}>
+          <View style={[styles.modalSheetContainer, isDarkMode && { backgroundColor: '#161F30' }]}>
+            <View style={[styles.modalHeaderRow, isDarkMode && { borderBottomColor: '#1F2937' }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                 <View style={[styles.cardIconBox, { backgroundColor: '#EEF2FF', marginRight: 10 }]}>
                   <Ionicons name="school" size={22} color="#4F46E5" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.modalTitle}>Request Course Certificate</Text>
-                  <Text style={{ fontSize: 11, color: '#64748B' }}>
+                  <Text style={[styles.modalTitle, isDarkMode && { color: '#F8FAFC' }]}>Request Course Certificate</Text>
+                  <Text style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B' }}>
                     Select an eligible completed course
                   </Text>
                 </View>
@@ -665,24 +668,24 @@ export default function StudentCertificatesScreen() {
                   setIsRequestModalVisible(false);
                   setSelectedCourseForRequest(null);
                 }}
-                style={styles.modalCloseBtn}
+                style={[styles.modalCloseBtn, isDarkMode && { backgroundColor: '#1E293B' }]}
               >
-                <Ionicons name="close" size={20} color="#64748B" />
+                <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollBody}>
-              <Text style={styles.requestInstructions}>
+              <Text style={[styles.requestInstructions, isDarkMode && { color: '#94A3B8' }]}>
                 Certificates can be requested for courses that you have completed with 100% learning progress. Select a course below to submit your issuance request:
               </Text>
 
               {eligibleCourses.length === 0 ? (
                 <View style={{ padding: 28, alignItems: 'center' }}>
                   <Ionicons name="book-outline" size={38} color="#94A3B8" style={{ marginBottom: 8 }} />
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 4 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: isDarkMode ? '#F8FAFC' : '#0F172A', marginBottom: 4 }}>
                     No Enrolled Courses Found
                   </Text>
-                  <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center' }}>
+                  <Text style={{ fontSize: 13, color: isDarkMode ? '#94A3B8' : '#64748B', textAlign: 'center' }}>
                     Enroll in academic courses to start earning course completion certificates.
                   </Text>
                 </View>
@@ -696,6 +699,7 @@ export default function StudentCertificatesScreen() {
                       key={c.courseId}
                       style={[
                         styles.courseSelectCard,
+                        isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
                         isSelected && styles.courseSelectCardActive,
                         alreadyRequested && styles.courseSelectCardDisabled,
                       ]}
@@ -727,8 +731,8 @@ export default function StudentCertificatesScreen() {
                           style={{ marginRight: 10, marginTop: 2 }}
                         />
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.courseSelectTitle}>{c.title}</Text>
-                          <Text style={styles.courseSelectMeta}>
+                          <Text style={[styles.courseSelectTitle, isDarkMode && { color: '#F8FAFC' }]}>{c.title}</Text>
+                          <Text style={[styles.courseSelectMeta, isDarkMode && { color: '#94A3B8' }]}>
                             Progress: {c.progress}% • {c.isComplete ? 'Ready for Certificate' : 'Incomplete'}
                           </Text>
                         </View>
